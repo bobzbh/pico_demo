@@ -1,0 +1,49 @@
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+
+# Unity generated files
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Unity crash and profiler files
+sysinfo.txt
+*.stackdump
+*.pid
+
+# Build/player output
+*.apk
+*.aab
+*.unitypackage
+*.app
+*.exe
+
+# Android/Gradle generated state
+.gradle/
+gradleOut/
+
+# Local runtime/test output
+XRTrainingExperimentData/
+Assets/Screenshots/
+ps_driver_sdk.log
+*.log
+
+# OS/editor noise
+.vs/
+.DS_Store
+Thumbs.db
+desktop.ini
