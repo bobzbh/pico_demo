@@ -3,9 +3,9 @@ using UnityEngine;
 [RequireComponent(typeof(LineRenderer))]
 public sealed class XRTrainingRayVisual : MonoBehaviour
 {
-    public float maxDistance = 6f;
+    public float maxDistance = 10f;
     public Color defaultColor = new Color(0.1f, 0.85f, 1f, 1f);
-    public Color hitColor = new Color(1f, 0.9f, 0.25f, 1f);
+    public Color hitColor = new Color(1f, 0.92f, 0.22f, 1f);
     public LayerMask layerMask = ~0;
 
     LineRenderer m_LineRenderer;
@@ -18,18 +18,18 @@ public sealed class XRTrainingRayVisual : MonoBehaviour
         m_LineRenderer.sharedMaterial = m_RuntimeMaterial;
         m_LineRenderer.positionCount = 2;
         m_LineRenderer.useWorldSpace = true;
-        m_LineRenderer.startWidth = 0.006f;
-        m_LineRenderer.endWidth = 0.002f;
+        m_LineRenderer.startWidth = 0.01f;
+        m_LineRenderer.endWidth = 0.003f;
     }
 
     void LateUpdate()
     {
-        var origin = transform.position;
-        var direction = transform.forward;
-        var end = origin + direction * maxDistance;
-        var color = defaultColor;
+        Vector3 origin = transform.position;
+        Vector3 direction = transform.forward;
+        Vector3 end = origin + direction * maxDistance;
+        Color color = defaultColor;
 
-        if (Physics.Raycast(origin, direction, out var hitInfo, maxDistance, layerMask, QueryTriggerInteraction.Ignore))
+        if (Physics.Raycast(origin, direction, out var hitInfo, maxDistance, layerMask, QueryTriggerInteraction.Collide))
         {
             end = hitInfo.point;
             color = hitColor;

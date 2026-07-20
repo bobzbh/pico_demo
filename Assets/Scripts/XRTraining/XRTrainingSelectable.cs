@@ -8,17 +8,16 @@ public sealed class XRTrainingSelectable : MonoBehaviour
 {
     public XRTrainingManager manager;
     public string displayName = "Object";
-    public Color hoverColor = new Color(1f, 0.95f, 0.25f, 1f);
+    public Color hoverColor = new Color(1f, 0.95f, 0.15f, 1f);
 
     readonly List<Material> m_Materials = new List<Material>();
-    readonly List<Color> m_OriginalColors = new List<Color>();
+    readonly List<Color> m_BaseColors = new List<Color>();
     XRBaseInteractable m_Interactable;
 
     void Awake()
     {
         CacheMaterials();
         m_Interactable = GetComponent<XRBaseInteractable>();
-
         if (m_Interactable == null)
             return;
 
@@ -37,29 +36,10 @@ public sealed class XRTrainingSelectable : MonoBehaviour
         m_Interactable.selectEntered.RemoveListener(OnSelectEntered);
     }
 
-    void CacheMaterials()
-    {
-        m_Materials.Clear();
-        m_OriginalColors.Clear();
-
-        var renderers = GetComponentsInChildren<Renderer>();
-        foreach (var objectRenderer in renderers)
-        {
-            Material[] materials = Application.isPlaying ? objectRenderer.materials : objectRenderer.sharedMaterials;
-            foreach (var material in materials)
-            {
-                if (material == null)
-                    continue;
-
-                m_Materials.Add(material);
-                m_OriginalColors.Add(ReadColor(material));
-            }
-        }
-    }
-
     void OnHoverEntered(HoverEnterEventArgs args)
     {
         SetHighlight(true);
+        manager?.ShowObjectName(displayName);
     }
 
     void OnHoverExited(HoverExitEventArgs args)
@@ -69,19 +49,37 @@ public sealed class XRTrainingSelectable : MonoBehaviour
 
     void OnSelectEntered(SelectEnterEventArgs args)
     {
-        if (manager != null)
-            manager.ShowObjectName(displayName);
+        manager?.ShowObjectName(displayName);
+    }
+
+    void CacheMaterials()
+    {
+        m_Materials.Clear();
+        m_BaseColors.Clear();
+
+        foreach (var objectRenderer in GetComponentsInChildren<Renderer>())
+        {
+            Material[] materials = Application.isPlaying ? objectRenderer.materials : objectRenderer.sharedMaterials;
+            foreach (var material in materials)
+            {
+                if (material == null)
+                    continue;
+
+                m_Materials.Add(material);
+                m_BaseColors.Add(ReadColor(material));
+            }
+        }
     }
 
     void SetHighlight(bool active)
     {
-        for (var i = 0; i < m_Materials.Count; i++)
+        for (int i = 0; i < m_Materials.Count; i++)
         {
             var material = m_Materials[i];
             if (material == null)
                 continue;
 
-            WriteColor(material, active ? hoverColor : m_OriginalColors[i]);
+            WriteColor(material, active ? hoverColor : m_BaseColors[i]);
         }
     }
 

@@ -1,15 +1,11 @@
 using System;
-using UnityEngine;
 
 public enum XRTrainingTaskState
 {
     WaitingToStart,
-    Instructions,
     Running,
     Completed,
-    Failed,
-    Results,
-    Restarting
+    Ended
 }
 
 public enum XRTrainingDifficulty
@@ -24,91 +20,39 @@ public enum XRTrainingEventType
     TaskStart,
     ObjectGrab,
     ObjectRelease,
+    ObjectSelected,
     CorrectPlacement,
     WrongPlacement,
     Teleport,
     InvalidTeleport,
     TaskComplete,
-    TaskFailed,
+    TaskEnded,
     TaskReset,
-    DifficultyChanged
+    LightToggled
 }
 
 [Serializable]
 public sealed class XRTrainingDifficultyConfig
 {
     public XRTrainingDifficulty difficulty = XRTrainingDifficulty.Easy;
-    public string displayName = "Easy";
+    public string displayName = "Basic";
     public int blockCount = 3;
-    public int distractorCount;
-    public float targetRadius = 0.52f;
-    public float blockSpacing = 0.78f;
-    public float targetSpacing = 1.55f;
-    public float targetDistance = 1.75f;
-    public float timeLimitSeconds;
-    public bool randomizeInitialPositions;
-    public float randomRadius = 0.15f;
-    public int scorePerCorrect = 100;
-    public int penaltyPerWrong = 10;
+    public int scorePerCorrect = 1;
+    public int penaltyPerWrong = 0;
 
     public static XRTrainingDifficultyConfig Easy()
     {
-        return new XRTrainingDifficultyConfig
-        {
-            difficulty = XRTrainingDifficulty.Easy,
-            displayName = "Easy",
-            blockCount = 3,
-            distractorCount = 0,
-            targetRadius = 0.52f,
-            blockSpacing = 0.82f,
-            targetSpacing = 1.55f,
-            targetDistance = 1.72f,
-            timeLimitSeconds = 0f,
-            randomizeInitialPositions = false,
-            randomRadius = 0.12f,
-            scorePerCorrect = 100,
-            penaltyPerWrong = 10
-        };
+        return new XRTrainingDifficultyConfig();
     }
 
     public static XRTrainingDifficultyConfig Normal()
     {
-        return new XRTrainingDifficultyConfig
-        {
-            difficulty = XRTrainingDifficulty.Normal,
-            displayName = "Normal",
-            blockCount = 5,
-            distractorCount = 1,
-            targetRadius = 0.43f,
-            blockSpacing = 0.76f,
-            targetSpacing = 1.35f,
-            targetDistance = 2.25f,
-            timeLimitSeconds = 120f,
-            randomizeInitialPositions = true,
-            randomRadius = 0.36f,
-            scorePerCorrect = 100,
-            penaltyPerWrong = 15
-        };
+        return new XRTrainingDifficultyConfig { difficulty = XRTrainingDifficulty.Normal, displayName = "Normal" };
     }
 
     public static XRTrainingDifficultyConfig Hard()
     {
-        return new XRTrainingDifficultyConfig
-        {
-            difficulty = XRTrainingDifficulty.Hard,
-            displayName = "Hard",
-            blockCount = 5,
-            distractorCount = 2,
-            targetRadius = 0.34f,
-            blockSpacing = 0.78f,
-            targetSpacing = 1.45f,
-            targetDistance = 2.65f,
-            timeLimitSeconds = 90f,
-            randomizeInitialPositions = true,
-            randomRadius = 0.52f,
-            scorePerCorrect = 100,
-            penaltyPerWrong = 20
-        };
+        return new XRTrainingDifficultyConfig { difficulty = XRTrainingDifficulty.Hard, displayName = "Hard" };
     }
 }
 
