@@ -3,9 +3,12 @@ using System;
 public enum XRTrainingTaskState
 {
     WaitingToStart,
+    Instructions,
     Running,
     Completed,
-    Ended
+    Failed,
+    Results,
+    Restarting
 }
 
 public enum XRTrainingDifficulty
@@ -17,6 +20,8 @@ public enum XRTrainingDifficulty
 
 public enum XRTrainingEventType
 {
+    StateChanged,
+    TaskInstruction,
     TaskStart,
     ObjectGrab,
     ObjectRelease,
@@ -26,7 +31,9 @@ public enum XRTrainingEventType
     Teleport,
     InvalidTeleport,
     TaskComplete,
+    TaskFailed,
     TaskEnded,
+    ResultsShown,
     TaskReset,
     LightToggled
 }

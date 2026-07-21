@@ -9,7 +9,7 @@ public sealed class XRTrainingMouseGrabber : MonoBehaviour
     public Camera eventCamera;
     public float maxRayDistance = 30f;
     public LayerMask raycastMask = ~0;
-    public bool autoStartOnMouseGrab = true;
+    public bool autoStartOnMouseGrab;
 
     XRTrainingGrabbable m_Held;
     float m_HoldPlaneY;

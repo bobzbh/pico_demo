@@ -20,6 +20,12 @@ public sealed class XRTrainingManager : MonoBehaviour
     public Transform trainingRoot;
     public Light sceneLight;
 
+    [Header("Task Flow")]
+    public float instructionSeconds = 1f;
+    public string userId = "P001";
+    public string taskId = "ColorBlockTask";
+    public XRTrainingDifficultyConfig difficultyConfig = new XRTrainingDifficultyConfig();
+
     [Header("Optional Recording")]
     public XRTrainingDataLogger dataLogger;
     public XRTrainingTeleportTracker teleportTracker;
@@ -43,6 +49,13 @@ public sealed class XRTrainingManager : MonoBehaviour
     Quaternion m_InitialOriginRotation;
     bool m_HasCapturedStart;
     bool m_HasAlignedScene;
+    bool m_TimerRunning;
+    bool m_TrialRecordingActive;
+    bool m_CompletionEventLogged;
+    bool m_ResultsEventLogged;
+    float m_TaskStartTime;
+    float m_StateEnteredTime;
+    int m_TrialNumber;
 
     public XRTrainingTaskState CurrentState { get; private set; } = XRTrainingTaskState.WaitingToStart;
     public bool CanInteractWithObjects => CurrentState == XRTrainingTaskState.Running;
@@ -60,11 +73,13 @@ public sealed class XRTrainingManager : MonoBehaviour
         yield return null;
         AlignTrainingRootToHeadForward();
         CaptureStartState();
-        ResetTask();
+        ResetTaskInternal(false);
     }
 
     void Update()
     {
+        HandleInstructionCountdown();
+        UpdateTimer();
         HandleKeyboardShortcuts();
         CheckFinishReached();
     }
@@ -72,43 +87,49 @@ public sealed class XRTrainingManager : MonoBehaviour
     public void StartTask()
     {
         ResolveReferences();
-        CurrentState = XRTrainingTaskState.Running;
-        m_Stats.Clear();
 
-        ResetObjectsOnly();
-        SetAllObjectInteraction(true);
-        SetFinishUnlocked(false);
+        if (CurrentState == XRTrainingTaskState.Instructions || CurrentState == XRTrainingTaskState.Running)
+            return;
 
-        ShowStatus("Task started. Aim at a cube, use Trigger or Grip to grab, then release it on the matching target.");
+        if (CurrentState == XRTrainingTaskState.Completed)
+        {
+            ShowStatus("Task already complete. Go to Finish or click Reset for a new round.");
+            RefreshUI();
+            return;
+        }
+
+        PrepareRoundForStart();
+        BeginTrialRecording();
+        EnterState(XRTrainingTaskState.Instructions, "Read the goal: put each color cube on the matching target.");
+        SetText(selectedObjectText, selectedObjectMeshText, "Selected: none");
+        SetText(completionText, completionMeshText, "State: Instructions. Task will begin shortly.");
+        LogEvent(XRTrainingEventType.TaskInstruction, "Instructions", Vector3.zero, "color matching instructions");
         RefreshUI();
-        LogEvent(XRTrainingEventType.TaskStart, "TaskStart", Vector3.zero, "start");
+
+        if (instructionSeconds <= 0f)
+            BeginRunningState();
     }
 
     public void ResetTask()
     {
-        ResolveReferences();
-        CaptureStartState();
-        CurrentState = XRTrainingTaskState.WaitingToStart;
-        m_Stats.resetCount++;
-        m_Stats.score = 0;
-        m_Stats.correctPlacements = 0;
-        m_Stats.wrongPlacements = 0;
-        m_Stats.success = false;
-
-        ResetObjectsOnly();
-        SetAllObjectInteraction(false);
-        SetFinishUnlocked(false);
-        MoveOrigin(m_InitialOriginPosition, m_InitialOriginRotation);
-
-        SetText(selectedObjectText, selectedObjectMeshText, "Selected: none");
-        ShowStatus("Press Start, then use the simulator controllers to grab the three color cubes.");
-        RefreshUI();
-        LogEvent(XRTrainingEventType.TaskReset, "Reset", Vector3.zero, "reset");
+        RestartTask();
     }
 
     public void RestartTask()
     {
-        ResetTask();
+        ResolveReferences();
+
+        if (CurrentState != XRTrainingTaskState.WaitingToStart)
+            EnterState(XRTrainingTaskState.Restarting, "Restarting task. Resetting score, timer, objects, and state.");
+
+        if (m_TrialRecordingActive)
+        {
+            LogEvent(XRTrainingEventType.TaskReset, "Reset", Vector3.zero, "manual restart");
+            dataLogger?.EndTrial();
+            m_TrialRecordingActive = false;
+        }
+
+        ResetTaskInternal(true);
     }
 
     public void ToggleLight()
@@ -119,10 +140,14 @@ public sealed class XRTrainingManager : MonoBehaviour
         sceneLight.enabled = !sceneLight.enabled;
         ShowStatus(sceneLight.enabled ? "Light on." : "Light off.");
         LogEvent(XRTrainingEventType.LightToggled, "Light", Vector3.zero, sceneLight.enabled ? "on" : "off");
+        RefreshUI();
     }
 
     public void ShowObjectName(string objectName)
     {
+        if (CurrentState != XRTrainingTaskState.Running)
+            return;
+
         SetText(selectedObjectText, selectedObjectMeshText, "Selected: " + objectName);
         LogEvent(XRTrainingEventType.ObjectSelected, objectName, Vector3.zero, "select");
     }
@@ -154,10 +179,14 @@ public sealed class XRTrainingManager : MonoBehaviour
     {
         string objectName = grabbable != null ? grabbable.displayName : "Object";
         ShowStatus(objectName + ": " + reason);
+        RefreshUI();
     }
 
     public void ReportTeleport(Vector3 position)
     {
+        if (CurrentState != XRTrainingTaskState.Running && CurrentState != XRTrainingTaskState.Completed)
+            return;
+
         m_Stats.teleportCount++;
         ShowStatus("Teleported.");
         LogEvent(XRTrainingEventType.Teleport, "Teleport", position, "teleport");
@@ -169,10 +198,17 @@ public sealed class XRTrainingManager : MonoBehaviour
     {
         ShowStatus("Cannot teleport: " + reason);
         LogEvent(XRTrainingEventType.InvalidTeleport, "Teleport", position, reason);
+        RefreshUI();
     }
 
     public void TryTeleportFromRay()
     {
+        if (CurrentState != XRTrainingTaskState.Running && CurrentState != XRTrainingTaskState.Completed)
+        {
+            ReportInvalidTeleport(xrOrigin != null ? xrOrigin.position : Vector3.zero, "start the task before teleporting");
+            return;
+        }
+
         Transform rayTransform = rightRayTransform != null ? rightRayTransform : leftRayTransform;
         if (rayTransform == null)
         {
@@ -194,7 +230,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         }
 
         bool hitFinish = hitInfo.collider.transform.root.name.Contains("Finish") || hitInfo.collider.name.Contains("Finish");
-        if (hitFinish && !TaskSolved)
+        if (hitFinish && CurrentState != XRTrainingTaskState.Completed)
         {
             ReportInvalidTeleport(hitInfo.point, "finish is locked until all cubes are matched");
             return;
@@ -205,9 +241,9 @@ public sealed class XRTrainingManager : MonoBehaviour
 
     public void TryTeleportToFinish()
     {
-        if (!TaskSolved)
+        if (CurrentState != XRTrainingTaskState.Completed)
         {
-            ReportInvalidTeleport(xrOrigin != null ? xrOrigin.position : Vector3.zero, "finish is locked until all cubes are matched");
+            ReportInvalidTeleport(xrOrigin != null ? xrOrigin.position : Vector3.zero, "finish is locked until the task is complete");
             return;
         }
 
@@ -220,8 +256,88 @@ public sealed class XRTrainingManager : MonoBehaviour
         TeleportTo(finishZone.bounds.center);
     }
 
+    public void FailTask(string reason)
+    {
+        if (CurrentState != XRTrainingTaskState.Running && CurrentState != XRTrainingTaskState.Instructions)
+            return;
+
+        StopTimer();
+        m_Stats.success = false;
+        SetAllObjectInteraction(false);
+        SetFinishUnlocked(false);
+        EnterState(XRTrainingTaskState.Failed, "Task failed: " + reason);
+        SetText(completionText, completionMeshText, "State: Failed. Click Reset to try again.");
+        LogEvent(XRTrainingEventType.TaskFailed, "Failed", Vector3.zero, reason);
+        dataLogger?.EndTrial();
+        m_TrialRecordingActive = false;
+        RefreshUI();
+    }
+
+    void HandleInstructionCountdown()
+    {
+        if (CurrentState != XRTrainingTaskState.Instructions)
+            return;
+
+        if (Time.unscaledTime - m_StateEnteredTime >= Mathf.Max(0f, instructionSeconds))
+            BeginRunningState();
+        else
+            RefreshUI();
+    }
+
+    void BeginRunningState()
+    {
+        if (CurrentState != XRTrainingTaskState.Instructions)
+            return;
+
+        m_TaskStartTime = Time.unscaledTime;
+        m_Stats.elapsedSeconds = 0f;
+        m_TimerRunning = true;
+        SetAllObjectInteraction(true);
+        SetFinishUnlocked(false);
+        EnterState(XRTrainingTaskState.Running, "Task running. Grab cubes and place them on matching targets.");
+        LogEvent(XRTrainingEventType.TaskStart, "TaskStart", Vector3.zero, "timer started");
+        RefreshUI();
+    }
+
+    void PrepareRoundForStart()
+    {
+        m_Stats.Clear();
+        m_TimerRunning = false;
+        m_CompletionEventLogged = false;
+        m_ResultsEventLogged = false;
+        SetAllObjectInteraction(false);
+        ResetObjectsOnly();
+        SetFinishUnlocked(false);
+        MoveOrigin(m_InitialOriginPosition, m_InitialOriginRotation);
+    }
+
+    void ResetTaskInternal(bool userInitiated)
+    {
+        ResolveReferences();
+        CaptureStartState();
+        StopTimer();
+        dataLogger?.EndTrial();
+        m_TrialRecordingActive = false;
+        m_CompletionEventLogged = false;
+        m_ResultsEventLogged = false;
+        m_Stats.Clear();
+
+        SetAllObjectInteraction(false);
+        ResetObjectsOnly();
+        SetFinishUnlocked(false);
+        MoveOrigin(m_InitialOriginPosition, m_InitialOriginRotation);
+
+        SetText(selectedObjectText, selectedObjectMeshText, "Selected: none");
+        EnterState(XRTrainingTaskState.WaitingToStart, userInitiated ? "Reset complete. Click Start for the next round." : "Click Start to begin the training task.");
+        SetText(completionText, completionMeshText, "State: Waiting to start.");
+        RefreshUI();
+    }
+
     void EvaluatePlacement(XRTrainingGrabbable grabbable)
     {
+        if (CurrentState != XRTrainingTaskState.Running || m_CompletionEventLogged)
+            return;
+
         XRTrainingTargetZone zone = grabbable.CurrentZone != null ? grabbable.CurrentZone : FindContainingTarget(grabbable.transform.position);
         if (zone == null)
         {
@@ -254,31 +370,46 @@ public sealed class XRTrainingManager : MonoBehaviour
 
     void CompleteMatchingTask()
     {
-        CurrentState = XRTrainingTaskState.Completed;
+        if (CurrentState != XRTrainingTaskState.Running || m_CompletionEventLogged)
+            return;
+
+        StopTimer();
+        m_CompletionEventLogged = true;
         m_Stats.success = true;
         SetAllObjectInteraction(false);
         SetFinishUnlocked(true);
-        ShowStatus("Task complete. Aim at the Finish floor and teleport, or click Go Finish.");
-        SetText(completionText, completionMeshText, "Task complete. Finish unlocked.");
+        EnterState(XRTrainingTaskState.Completed, "Task complete. Finish unlocked. Go to Finish for results.");
+        SetText(completionText, completionMeshText, "State: Completed. Finish unlocked.");
         LogEvent(XRTrainingEventType.TaskComplete, "Complete", Vector3.zero, "all cubes matched");
         RefreshUI();
     }
 
     void CheckFinishReached()
     {
-        if (!TaskSolved || CurrentState == XRTrainingTaskState.Ended || finishZone == null)
+        if (CurrentState != XRTrainingTaskState.Completed || finishZone == null || m_ResultsEventLogged)
             return;
 
         Vector3 checkPosition = headTransform != null ? headTransform.position : (xrOrigin != null ? xrOrigin.position : Vector3.zero);
         if (!finishZone.bounds.Contains(checkPosition))
             return;
 
-        CurrentState = XRTrainingTaskState.Ended;
+        ShowResults(checkPosition);
+    }
+
+    void ShowResults(Vector3 finishPosition)
+    {
+        if (m_ResultsEventLogged)
+            return;
+
+        m_ResultsEventLogged = true;
         SetAllObjectInteraction(false);
         SetFinishUnlocked(true);
-        ShowStatus("Task finished.");
-        SetText(completionText, completionMeshText, "Task finished. Click Restart to run again.");
-        LogEvent(XRTrainingEventType.TaskEnded, "Finish", checkPosition, "finish reached");
+        EnterState(XRTrainingTaskState.Results, "Results shown. Click Reset to run another round.");
+        SetText(completionText, completionMeshText, "State: Results. Score " + m_Stats.correctPlacements + " / " + RequiredScore() + ", Time " + FormatTime(m_Stats.elapsedSeconds) + ".");
+        LogEvent(XRTrainingEventType.TaskEnded, "Finish", finishPosition, "finish reached");
+        LogEvent(XRTrainingEventType.ResultsShown, "Results", finishPosition, "score=" + m_Stats.correctPlacements);
+        dataLogger?.EndTrial();
+        m_TrialRecordingActive = false;
         RefreshUI();
     }
 
@@ -356,7 +487,7 @@ public sealed class XRTrainingManager : MonoBehaviour
             StartTask();
 
         if (keyboard.rKey.wasPressedThisFrame)
-            ResetTask();
+            RestartTask();
 
         if (keyboard.lKey.wasPressedThisFrame)
             ToggleLight();
@@ -418,6 +549,52 @@ public sealed class XRTrainingManager : MonoBehaviour
             teleportTracker.Configure(this, xrOrigin);
     }
 
+    void BeginTrialRecording()
+    {
+        if (dataLogger == null)
+            return;
+
+        m_TrialNumber++;
+        XRTrainingDifficulty difficulty = difficultyConfig != null ? difficultyConfig.difficulty : XRTrainingDifficulty.Easy;
+        string label = difficultyConfig != null ? difficultyConfig.displayName : "Basic";
+        dataLogger.BeginTrial(userId, taskId, m_TrialNumber, difficulty, label);
+        m_TrialRecordingActive = true;
+    }
+
+    void EnterState(XRTrainingTaskState nextState, string message)
+    {
+        if (CurrentState == nextState)
+        {
+            ShowStatus(message);
+            return;
+        }
+
+        CurrentState = nextState;
+        m_StateEnteredTime = Time.unscaledTime;
+        ShowStatus(message);
+        LogEvent(XRTrainingEventType.StateChanged, nextState.ToString(), Vector3.zero, message);
+    }
+
+    void UpdateTimer()
+    {
+        if (!m_TimerRunning)
+            return;
+
+        m_Stats.elapsedSeconds = Mathf.Max(0f, Time.unscaledTime - m_TaskStartTime);
+        dataLogger?.TickPoseRecording(CurrentState, m_Stats.elapsedSeconds);
+        RefreshUI();
+    }
+
+    void StopTimer()
+    {
+        if (!m_TimerRunning)
+            return;
+
+        m_Stats.elapsedSeconds = Mathf.Max(0f, Time.unscaledTime - m_TaskStartTime);
+        m_TimerRunning = false;
+        dataLogger?.WritePoseSample(CurrentState, m_Stats.elapsedSeconds);
+    }
+
     XRTrainingTargetZone FindContainingTarget(Vector3 position)
     {
         if (targetZones == null)
@@ -449,18 +626,11 @@ public sealed class XRTrainingManager : MonoBehaviour
 
     void RefreshUI()
     {
-        SetText(scoreText, scoreMeshText, "Score: " + m_Stats.correctPlacements + " / " + RequiredScore());
-
-        string completion = "Task not complete.";
-        if (CurrentState == XRTrainingTaskState.Completed)
-            completion = "Task complete. Finish unlocked.";
-        else if (CurrentState == XRTrainingTaskState.Ended)
-            completion = "Task ended. Restart to practice again.";
-
-        SetText(completionText, completionMeshText, completion);
+        SetText(scoreText, scoreMeshText, "Score: " + m_Stats.correctPlacements + " / " + RequiredScore() + "   Time: " + FormatTime(m_Stats.elapsedSeconds));
+        SetText(completionText, completionMeshText, CompletionTextForState());
 
         if (startTaskButton != null)
-            startTaskButton.interactable = CurrentState != XRTrainingTaskState.Running;
+            startTaskButton.interactable = CurrentState == XRTrainingTaskState.WaitingToStart || CurrentState == XRTrainingTaskState.Failed || CurrentState == XRTrainingTaskState.Results;
 
         if (resetButton != null)
             resetButton.interactable = true;
@@ -469,7 +639,30 @@ public sealed class XRTrainingManager : MonoBehaviour
             lightButton.interactable = true;
 
         if (finishButton != null)
-            finishButton.interactable = TaskSolved;
+            finishButton.interactable = CurrentState == XRTrainingTaskState.Completed;
+    }
+
+    string CompletionTextForState()
+    {
+        switch (CurrentState)
+        {
+            case XRTrainingTaskState.WaitingToStart:
+                return "State: Waiting to start.";
+            case XRTrainingTaskState.Instructions:
+                return "State: Instructions. Starting soon.";
+            case XRTrainingTaskState.Running:
+                return "State: Running. Match all cubes.";
+            case XRTrainingTaskState.Completed:
+                return "State: Completed. Finish unlocked.";
+            case XRTrainingTaskState.Failed:
+                return "State: Failed. Click Reset.";
+            case XRTrainingTaskState.Results:
+                return "State: Results. Score " + m_Stats.correctPlacements + " / " + RequiredScore() + ", Time " + FormatTime(m_Stats.elapsedSeconds) + ".";
+            case XRTrainingTaskState.Restarting:
+                return "State: Restarting.";
+            default:
+                return "State: " + CurrentState + ".";
+        }
     }
 
     void ShowStatus(string message)
@@ -479,7 +672,12 @@ public sealed class XRTrainingManager : MonoBehaviour
 
     void LogEvent(XRTrainingEventType eventType, string objectName, Vector3 position, string details)
     {
-        dataLogger?.LogEvent(eventType, CurrentState, objectName, position, 0f, m_Stats, details);
+        dataLogger?.LogEvent(eventType, CurrentState, objectName, position, m_Stats.elapsedSeconds, m_Stats, details);
+    }
+
+    static string FormatTime(float seconds)
+    {
+        return seconds.ToString("0.0") + "s";
     }
 
     static void SetText(Text target, TextMesh meshTarget, string value)
