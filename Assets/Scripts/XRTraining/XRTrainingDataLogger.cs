@@ -9,6 +9,7 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
     [Header("Output")]
     public string outputFolderName = "XRTrainingExperimentData";
     public string customOutputRoot;
+    public int maxSavedTrialRecords = 5;
 
     public float poseSampleIntervalSeconds = 0.1f;
     public Transform headTransform;
@@ -74,6 +75,8 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
         m_TrajectoryWriter = new StreamWriter(TrajectoryFilePath, false, new UTF8Encoding(true));
         m_TrajectoryWriter.WriteLine("Timestamp,UserID,TaskID,TrialID,TrialNumber,Difficulty,DifficultyLabel,TaskState,ElapsedSeconds,HeadPosX,HeadPosY,HeadPosZ,HeadRotX,HeadRotY,HeadRotZ,HeadRotW,LeftPosX,LeftPosY,LeftPosZ,LeftRotX,LeftRotY,LeftRotZ,LeftRotW,RightPosX,RightPosY,RightPosZ,RightRotX,RightRotY,RightRotZ,RightRotW");
         m_TrajectoryWriter.Flush();
+
+        PruneOldRecords();
     }
 
     public void LogEvent(XRTrainingEventType eventType, XRTrainingTaskState taskState, string objectName, Vector3 position, float elapsedSeconds, XRTrainingRuntimeStats stats, string details)
@@ -174,6 +177,8 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
             writer.WriteLine(CsvLine(header));
             writer.WriteLine(CsvLine(columns));
         }
+
+        PruneOldRecords();
     }
 
     public void CompleteTrial(XRTrainingTaskState taskState, XRTrainingRuntimeStats stats, string resultEventType, string details)
@@ -262,6 +267,63 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
         EndTrial();
     }
 
+    public void PruneOldRecords()
+    {
+        if (maxSavedTrialRecords <= 0)
+            return;
+
+        string root = !string.IsNullOrEmpty(OutputRootPath) ? OutputRootPath : ResolveOutputRoot();
+        PruneDirectory(Path.Combine(root, "Events"), maxSavedTrialRecords);
+        PruneDirectory(Path.Combine(root, "Trajectories"), maxSavedTrialRecords);
+        PruneDirectory(Path.Combine(root, "Summaries"), maxSavedTrialRecords);
+    }
+
+    void PruneDirectory(string directory, int keepCount)
+    {
+        if (!Directory.Exists(directory))
+            return;
+
+        FileInfo[] files;
+        try
+        {
+            files = new DirectoryInfo(directory).GetFiles("*.csv", SearchOption.TopDirectoryOnly);
+        }
+        catch (IOException)
+        {
+            return;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        Array.Sort(files, CompareNewestFirst);
+
+        int retained = 0;
+        for (int i = 0; i < files.Length; i++)
+        {
+            string path = files[i].FullName;
+            if (IsCurrentRecordPath(path))
+            {
+                retained++;
+                continue;
+            }
+
+            if (retained < keepCount)
+            {
+                retained++;
+                continue;
+            }
+
+            TryDeleteFile(path);
+        }
+    }
+
+    bool IsCurrentRecordPath(string path)
+    {
+        return SamePath(path, EventFilePath) || SamePath(path, TrajectoryFilePath) || SamePath(path, SummaryFilePath);
+    }
+
     static string Position(Transform source, int axis)
     {
         Vector3 value = source != null ? source.position : Vector3.zero;
@@ -316,6 +378,36 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
         }
 
         return builder.ToString();
+    }
+
+    static int CompareNewestFirst(FileInfo left, FileInfo right)
+    {
+        int result = right.LastWriteTimeUtc.CompareTo(left.LastWriteTimeUtc);
+        return result != 0 ? result : string.CompareOrdinal(left.FullName, right.FullName);
+    }
+
+    static bool SamePath(string left, string right)
+    {
+        if (string.IsNullOrEmpty(left) || string.IsNullOrEmpty(right))
+            return false;
+
+        return string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), StringComparison.OrdinalIgnoreCase);
+    }
+
+    static void TryDeleteFile(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException exception)
+        {
+            Debug.Log("[XRTrainingDataLogger] Could not delete old record: " + path + " (" + exception.Message + ")");
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            Debug.Log("[XRTrainingDataLogger] Could not delete old record: " + path + " (" + exception.Message + ")");
+        }
     }
 
     string ResolveOutputRoot()

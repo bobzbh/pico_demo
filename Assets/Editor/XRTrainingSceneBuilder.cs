@@ -79,6 +79,7 @@ public static class XRTrainingSceneBuilder
 
         var dataLogger = managerObject.AddComponent<XRTrainingDataLogger>();
         dataLogger.outputFolderName = "XRTrainingExperimentData";
+        dataLogger.maxSavedTrialRecords = 5;
         dataLogger.ConfigurePoseSources(manager.headTransform, manager.leftControllerTransform, manager.rightControllerTransform);
         manager.dataLogger = dataLogger;
 
