@@ -509,40 +509,40 @@ public static class XRTrainingSceneBuilder
         scaler.dynamicPixelsPerUnit = 1500f;
 
         var canvasRect = canvasObject.GetComponent<RectTransform>();
-        canvasRect.sizeDelta = new Vector2(760f, 430f);
+        canvasRect.sizeDelta = new Vector2(800f, 520f);
 
-        CreateUIImage("Panel Background", canvasObject.transform, new Vector2(760f, 430f), Vector2.zero, new Color(0.04f, 0.05f, 0.06f, 0.86f));
-        CreateUIText("Title", canvasObject.transform, "XR Training Tasks", 34, new Vector2(0f, 170f), new Vector2(700f, 44f), TextAnchor.MiddleCenter, Color.white);
-        manager.selectedObjectText = CreateUIText("Selected Object", canvasObject.transform, "Selected: none", 22, new Vector2(0f, 112f), new Vector2(680f, 34f), TextAnchor.MiddleLeft, Color.white);
-        manager.scoreText = CreateUIText("Score", canvasObject.transform, "Score: 0 / 3", 22, new Vector2(0f, 76f), new Vector2(680f, 34f), TextAnchor.MiddleLeft, Color.white);
-        manager.statusText = CreateUIText("Status", canvasObject.transform, "Press Start to begin.", 18, new Vector2(0f, 22f), new Vector2(680f, 60f), TextAnchor.MiddleLeft, new Color(0.82f, 0.92f, 1f, 1f));
-        manager.completionText = CreateUIText("Completion", canvasObject.transform, "Task not complete.", 20, new Vector2(0f, -42f), new Vector2(680f, 38f), TextAnchor.MiddleCenter, new Color(1f, 0.9f, 0.35f, 1f));
+        CreateUIImage("Panel Background", canvasObject.transform, new Vector2(800f, 520f), Vector2.zero, new Color(0.04f, 0.05f, 0.06f, 0.86f));
+        CreateUIText("Title", canvasObject.transform, "XR Training Tasks", 32, new Vector2(0f, 214f), new Vector2(720f, 48f), TextAnchor.MiddleCenter, Color.white);
+        manager.selectedObjectText = CreateUIText("Selected Object", canvasObject.transform, "Selected: none", 19, new Vector2(0f, 152f), new Vector2(700f, 34f), TextAnchor.MiddleLeft, Color.white);
+        manager.scoreText = CreateUIText("Score", canvasObject.transform, "Score: 0 / 3", 19, new Vector2(0f, 110f), new Vector2(700f, 34f), TextAnchor.MiddleLeft, Color.white);
+        manager.statusText = CreateUIText("Status", canvasObject.transform, "Press Start to begin.", 16, new Vector2(0f, 48f), new Vector2(700f, 66f), TextAnchor.MiddleLeft, new Color(0.82f, 0.92f, 1f, 1f));
+        manager.completionText = CreateUIText("Completion", canvasObject.transform, "Task not complete.", 18, new Vector2(0f, -44f), new Vector2(700f, 78f), TextAnchor.MiddleCenter, new Color(1f, 0.9f, 0.35f, 1f));
 
-        manager.startTaskButton = CreateUIButton("Start Button", canvasObject.transform, "Start", new Vector2(238f, -148f), new Vector2(132f, 50f));
-        manager.resetButton = CreateUIButton("Reset Button", canvasObject.transform, "Reset", new Vector2(78f, -148f), new Vector2(132f, 50f));
-        manager.lightButton = CreateUIButton("Light Button", canvasObject.transform, "Light", new Vector2(-82f, -148f), new Vector2(132f, 50f));
-        manager.finishButton = CreateUIButton("Go Finish Button", canvasObject.transform, "Go Finish", new Vector2(-252f, -148f), new Vector2(154f, 50f));
+        manager.startTaskButton = CreateUIButton("Start Button", canvasObject.transform, "Start", new Vector2(250f, -202f), new Vector2(132f, 50f));
+        manager.resetButton = CreateUIButton("Reset Button", canvasObject.transform, "Reset", new Vector2(84f, -202f), new Vector2(132f, 50f));
+        manager.lightButton = CreateUIButton("Light Button", canvasObject.transform, "Light", new Vector2(-82f, -202f), new Vector2(132f, 50f));
+        manager.finishButton = CreateUIButton("Go Finish Button", canvasObject.transform, "Go Finish", new Vector2(-256f, -202f), new Vector2(154f, 50f));
 
         const float panelScale = 0.0018f;
         var panelCenter = new Vector3(0f, 2.18f, 2.85f);
         var standardButtonSize = new Vector2(132f, 50f);
         var finishButtonSize = new Vector2(154f, 50f);
         var bodyColor = new Color(0.9f, 0.95f, 1f, 1f);
-        manager.selectedObjectMeshText = CreatePanelWorldText("Selected Object World Text", parent, "Selected: none", PanelWorldPoint(panelCenter, new Vector2(0f, 112f), panelScale), 0.012f, bodyColor);
-        manager.scoreMeshText = CreatePanelWorldText("Score World Text", parent, "Score: 0 / 3", PanelWorldPoint(panelCenter, new Vector2(0f, 76f), panelScale), 0.012f, bodyColor);
-        manager.statusMeshText = CreatePanelWorldText("Status World Text", parent, "Press Start to begin.", PanelWorldPoint(panelCenter, new Vector2(0f, 16f), panelScale), 0.009f, new Color(0.78f, 0.9f, 1f, 1f));
-        manager.completionMeshText = CreatePanelWorldText("Completion World Text", parent, "Task not complete.", PanelWorldPoint(panelCenter, new Vector2(0f, -54f), panelScale), 0.011f, new Color(1f, 0.88f, 0.26f, 1f));
+        manager.selectedObjectMeshText = CreatePanelWorldText("Selected Object World Text", parent, "Selected: none", PanelWorldPoint(panelCenter, new Vector2(0f, 152f), panelScale), 0.0105f, bodyColor);
+        manager.scoreMeshText = CreatePanelWorldText("Score World Text", parent, "Score: 0 / 3", PanelWorldPoint(panelCenter, new Vector2(0f, 110f), panelScale), 0.0105f, bodyColor);
+        manager.statusMeshText = CreatePanelWorldText("Status World Text", parent, "Press Start to begin.", PanelWorldPoint(panelCenter, new Vector2(0f, 48f), panelScale), 0.0082f, new Color(0.78f, 0.9f, 1f, 1f));
+        manager.completionMeshText = CreatePanelWorldText("Completion World Text", parent, "Task not complete.", PanelWorldPoint(panelCenter, new Vector2(0f, -46f), panelScale), 0.0098f, new Color(1f, 0.88f, 0.26f, 1f));
 
-        CreatePanelWorldText("Title World Text", parent, "XR Training Tasks", PanelWorldPoint(panelCenter, new Vector2(0f, 170f), panelScale), 0.017f, Color.white);
-        CreatePanelWorldText("Start Button World Text", parent, "Start", PanelWorldPoint(panelCenter, new Vector2(238f, -148f), panelScale), 0.012f, Color.white);
-        CreatePanelWorldText("Reset Button World Text", parent, "Reset", PanelWorldPoint(panelCenter, new Vector2(78f, -148f), panelScale), 0.012f, Color.white);
-        CreatePanelWorldText("Light Button World Text", parent, "Light", PanelWorldPoint(panelCenter, new Vector2(-82f, -148f), panelScale), 0.012f, Color.white);
-        CreatePanelWorldText("Go Finish Button World Text", parent, "Go Finish", PanelWorldPoint(panelCenter, new Vector2(-252f, -148f), panelScale), 0.0105f, Color.white);
+        CreatePanelWorldText("Title World Text", parent, "XR Training Tasks", PanelWorldPoint(panelCenter, new Vector2(0f, 214f), panelScale), 0.0155f, Color.white);
+        CreatePanelWorldText("Start Button World Text", parent, "Start", PanelWorldPoint(panelCenter, new Vector2(250f, -202f), panelScale), 0.012f, Color.white);
+        CreatePanelWorldText("Reset Button World Text", parent, "Reset", PanelWorldPoint(panelCenter, new Vector2(84f, -202f), panelScale), 0.012f, Color.white);
+        CreatePanelWorldText("Light Button World Text", parent, "Light", PanelWorldPoint(panelCenter, new Vector2(-82f, -202f), panelScale), 0.012f, Color.white);
+        CreatePanelWorldText("Go Finish Button World Text", parent, "Go Finish", PanelWorldPoint(panelCenter, new Vector2(-256f, -202f), panelScale), 0.0105f, Color.white);
 
-        CreatePanelButtonHitbox("Start Button Hitbox", parent, manager, manager.startTaskButton, XRTrainingPanelAction.Start, PanelWorldPoint(panelCenter, new Vector2(238f, -148f), panelScale), standardButtonSize, panelScale);
-        CreatePanelButtonHitbox("Reset Button Hitbox", parent, manager, manager.resetButton, XRTrainingPanelAction.Reset, PanelWorldPoint(panelCenter, new Vector2(78f, -148f), panelScale), standardButtonSize, panelScale);
-        CreatePanelButtonHitbox("Light Button Hitbox", parent, manager, manager.lightButton, XRTrainingPanelAction.ToggleLight, PanelWorldPoint(panelCenter, new Vector2(-82f, -148f), panelScale), standardButtonSize, panelScale);
-        CreatePanelButtonHitbox("Go Finish Button Hitbox", parent, manager, manager.finishButton, XRTrainingPanelAction.GoFinish, PanelWorldPoint(panelCenter, new Vector2(-252f, -148f), panelScale), finishButtonSize, panelScale);
+        CreatePanelButtonHitbox("Start Button Hitbox", parent, manager, manager.startTaskButton, XRTrainingPanelAction.Start, PanelWorldPoint(panelCenter, new Vector2(250f, -202f), panelScale), standardButtonSize, panelScale);
+        CreatePanelButtonHitbox("Reset Button Hitbox", parent, manager, manager.resetButton, XRTrainingPanelAction.Reset, PanelWorldPoint(panelCenter, new Vector2(84f, -202f), panelScale), standardButtonSize, panelScale);
+        CreatePanelButtonHitbox("Light Button Hitbox", parent, manager, manager.lightButton, XRTrainingPanelAction.ToggleLight, PanelWorldPoint(panelCenter, new Vector2(-82f, -202f), panelScale), standardButtonSize, panelScale);
+        CreatePanelButtonHitbox("Go Finish Button Hitbox", parent, manager, manager.finishButton, XRTrainingPanelAction.GoFinish, PanelWorldPoint(panelCenter, new Vector2(-256f, -202f), panelScale), finishButtonSize, panelScale);
 
         UnityEventTools.AddPersistentListener(manager.startTaskButton.onClick, manager.StartTask);
         UnityEventTools.AddPersistentListener(manager.resetButton.onClick, manager.ResetTask);
@@ -567,6 +567,7 @@ public static class XRTrainingSceneBuilder
         textMesh.font = GetBuiltinFont();
         textMesh.fontSize = 64;
         textMesh.characterSize = characterSize;
+        textMesh.lineSpacing = 1.12f;
         textMesh.anchor = TextAnchor.MiddleCenter;
         textMesh.alignment = TextAlignment.Center;
         textMesh.color = color;
@@ -631,6 +632,7 @@ public static class XRTrainingSceneBuilder
         label.resizeTextForBestFit = true;
         label.resizeTextMinSize = Mathf.Max(10, fontSize - 7);
         label.resizeTextMaxSize = fontSize;
+        label.lineSpacing = 1.16f;
         label.alignment = alignment;
         label.color = color;
         label.horizontalOverflow = HorizontalWrapMode.Wrap;

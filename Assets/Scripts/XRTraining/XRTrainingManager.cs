@@ -268,7 +268,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         m_FailureReason = reason;
         SetAllObjectInteraction(false);
         SetFinishUnlocked(false);
-        EnterState(XRTrainingTaskState.Failed, "Task failed: " + reason);
+        EnterState(XRTrainingTaskState.Failed, "Task failed: " + FailureStatusText(reason));
         SetText(completionText, completionMeshText, "State: Failed. Click Reset to try again.");
         LogEvent(XRTrainingEventType.TaskFailed, "Failed", Vector3.zero, reason);
         dataLogger?.EndTrial();
@@ -588,7 +588,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         m_Stats.elapsedSeconds = CurrentElapsedSeconds();
         if (HasTimeLimit() && m_Stats.elapsedSeconds >= timeLimitSeconds && !TaskSolved)
         {
-            FailTask("Time limit reached before all cubes were matched.");
+            FailTask("Time limit reached.");
             return;
         }
 
@@ -710,6 +710,11 @@ public sealed class XRTrainingManager : MonoBehaviour
     string FailureText()
     {
         return string.IsNullOrEmpty(m_FailureReason) ? "Task failed." : m_FailureReason;
+    }
+
+    static string FailureStatusText(string reason)
+    {
+        return string.IsNullOrEmpty(reason) ? "Task failed." : reason;
     }
 
     static string FormatTime(float seconds)
