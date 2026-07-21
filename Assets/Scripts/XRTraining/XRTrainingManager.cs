@@ -118,7 +118,17 @@ public sealed class XRTrainingManager : MonoBehaviour
 
     public void ResetTask()
     {
+        if (IsResultPageState())
+            ReturnToMainMenu();
+        else
+            RestartTask();
+    }
+
+    public void ReturnToMainMenu()
+    {
         RestartTask();
+        ShowStatus("Main menu. Choose a difficulty or start the next task.");
+        RefreshUI();
     }
 
     public void RestartTask()
@@ -171,6 +181,12 @@ public sealed class XRTrainingManager : MonoBehaviour
 
     public void ToggleLight()
     {
+        if (IsResultPageState())
+        {
+            SwitchDifficulty();
+            return;
+        }
+
         if (sceneLight == null)
             return;
 
@@ -178,6 +194,15 @@ public sealed class XRTrainingManager : MonoBehaviour
         ShowStatus(sceneLight.enabled ? "Light on." : "Light off.");
         LogEvent(XRTrainingEventType.LightToggled, "Light", Vector3.zero, sceneLight.enabled ? "on" : "off");
         RefreshUI();
+    }
+
+    public void SwitchDifficulty()
+    {
+        XRTrainingDifficulty next = CurrentDifficulty() == XRTrainingDifficulty.Easy
+            ? XRTrainingDifficulty.Normal
+            : XRTrainingDifficulty.Easy;
+
+        SelectDifficulty(next);
     }
 
     public void ShowObjectName(string objectName)
@@ -783,9 +808,14 @@ public sealed class XRTrainingManager : MonoBehaviour
 
     void RefreshUI()
     {
-        SetText(scoreText, scoreMeshText, "Score: " + m_Stats.correctPlacements + " / " + RequiredScore() + "   Time: " + TimerText());
-        SetText(difficultyText, difficultyMeshText, DifficultyDisplayText());
-        SetText(completionText, completionMeshText, CompletionTextForState());
+        if (IsResultPageState())
+            RefreshResultPageUI();
+        else
+        {
+            SetText(scoreText, scoreMeshText, "Score: " + m_Stats.correctPlacements + " / " + RequiredScore() + "   Time: " + TimerText());
+            SetText(difficultyText, difficultyMeshText, DifficultyDisplayText());
+            SetText(completionText, completionMeshText, CompletionTextForState());
+        }
 
         if (startTaskButton != null)
             startTaskButton.interactable = CurrentState == XRTrainingTaskState.WaitingToStart || CurrentState == XRTrainingTaskState.Failed || CurrentState == XRTrainingTaskState.Results;
@@ -805,6 +835,17 @@ public sealed class XRTrainingManager : MonoBehaviour
 
         if (finishButton != null)
             finishButton.interactable = CurrentState == XRTrainingTaskState.Completed;
+
+        RefreshButtonLabels();
+    }
+
+    void RefreshResultPageUI()
+    {
+        SetText(difficultyText, difficultyMeshText, "Result Page | Difficulty: " + DifficultyLabel());
+        SetText(selectedObjectText, selectedObjectMeshText, "User: " + SafeUserId() + "   Task: " + SafeTaskId());
+        SetText(scoreText, scoreMeshText, "Score: " + m_Stats.score + " / " + RequiredScore() + "   Time: " + FormatTime(m_Stats.elapsedSeconds));
+        SetText(statusText, statusMeshText, "Correct: " + m_Stats.correctPlacements + "   Wrong: " + m_Stats.wrongPlacements + "\nGrabs: " + m_Stats.grabCount + "   Teleports: " + m_Stats.teleportCount);
+        SetText(completionText, completionMeshText, "Success: " + (m_Stats.success ? "Yes" : "No") + "\nAgain / Menu / Switch difficulty");
     }
 
     string CompletionTextForState()
@@ -833,6 +874,59 @@ public sealed class XRTrainingManager : MonoBehaviour
     void ShowStatus(string message)
     {
         SetText(statusText, statusMeshText, message);
+    }
+
+    void RefreshButtonLabels()
+    {
+        bool resultPage = IsResultPageState();
+        SetButtonLabel(startTaskButton, resultPage ? "Again" : "Start", "Start Button World Text");
+        SetButtonLabel(resetButton, resultPage ? "Menu" : "Reset", "Reset Button World Text");
+        SetButtonLabel(lightButton, resultPage ? "Switch" : "Light", "Light Button World Text");
+        SetButtonLabel(finishButton, CurrentState == XRTrainingTaskState.Results ? "Done" : "Go Finish", "Go Finish Button World Text");
+    }
+
+    void SetButtonLabel(Button button, string label, string worldTextName)
+    {
+        if (button != null)
+        {
+            var uiText = button.GetComponentInChildren<Text>(true);
+            if (uiText != null)
+                uiText.text = label;
+        }
+
+        TextMesh worldText = FindWorldText(worldTextName);
+        if (worldText != null)
+            worldText.text = label;
+    }
+
+    TextMesh FindWorldText(string objectName)
+    {
+        if (trainingRoot == null || string.IsNullOrEmpty(objectName))
+            return null;
+
+        var texts = trainingRoot.GetComponentsInChildren<TextMesh>(true);
+        foreach (var text in texts)
+        {
+            if (text != null && text.name == objectName)
+                return text;
+        }
+
+        return null;
+    }
+
+    bool IsResultPageState()
+    {
+        return CurrentState == XRTrainingTaskState.Results || CurrentState == XRTrainingTaskState.Failed;
+    }
+
+    string SafeUserId()
+    {
+        return string.IsNullOrWhiteSpace(userId) ? "P001" : userId;
+    }
+
+    string SafeTaskId()
+    {
+        return string.IsNullOrWhiteSpace(taskId) ? "ColorBlockTask" : taskId;
     }
 
     void LogEvent(XRTrainingEventType eventType, string objectName, Vector3 position, string details)
