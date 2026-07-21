@@ -55,7 +55,7 @@ public sealed class XRTrainingDifficultyConfig
 
     public static XRTrainingDifficultyConfig Normal()
     {
-        return new XRTrainingDifficultyConfig { difficulty = XRTrainingDifficulty.Normal, displayName = "Normal", blockCount = 4, timeLimitSeconds = 8f };
+        return new XRTrainingDifficultyConfig { difficulty = XRTrainingDifficulty.Normal, displayName = "Normal", blockCount = 4, timeLimitSeconds = 5f };
     }
 
     public static XRTrainingDifficultyConfig Hard()
