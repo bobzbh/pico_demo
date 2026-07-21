@@ -523,6 +523,8 @@ public static class XRTrainingSceneBuilder
 
         const float panelScale = 0.0018f;
         var panelCenter = new Vector3(0f, 2.18f, 2.85f);
+        var standardButtonSize = new Vector2(132f, 50f);
+        var finishButtonSize = new Vector2(154f, 50f);
         var bodyColor = new Color(0.9f, 0.95f, 1f, 1f);
         manager.selectedObjectMeshText = CreatePanelWorldText("Selected Object World Text", parent, "Selected: none", PanelWorldPoint(panelCenter, new Vector2(0f, 112f), panelScale), 0.012f, bodyColor);
         manager.scoreMeshText = CreatePanelWorldText("Score World Text", parent, "Score: 0 / 3", PanelWorldPoint(panelCenter, new Vector2(0f, 76f), panelScale), 0.012f, bodyColor);
@@ -534,6 +536,11 @@ public static class XRTrainingSceneBuilder
         CreatePanelWorldText("Reset Button World Text", parent, "Reset", PanelWorldPoint(panelCenter, new Vector2(78f, -148f), panelScale), 0.012f, Color.white);
         CreatePanelWorldText("Light Button World Text", parent, "Light", PanelWorldPoint(panelCenter, new Vector2(-82f, -148f), panelScale), 0.012f, Color.white);
         CreatePanelWorldText("Go Finish Button World Text", parent, "Go Finish", PanelWorldPoint(panelCenter, new Vector2(-252f, -148f), panelScale), 0.0105f, Color.white);
+
+        CreatePanelButtonHitbox("Start Button Hitbox", parent, manager, manager.startTaskButton, XRTrainingPanelAction.Start, PanelWorldPoint(panelCenter, new Vector2(238f, -148f), panelScale), standardButtonSize, panelScale);
+        CreatePanelButtonHitbox("Reset Button Hitbox", parent, manager, manager.resetButton, XRTrainingPanelAction.Reset, PanelWorldPoint(panelCenter, new Vector2(78f, -148f), panelScale), standardButtonSize, panelScale);
+        CreatePanelButtonHitbox("Light Button Hitbox", parent, manager, manager.lightButton, XRTrainingPanelAction.ToggleLight, PanelWorldPoint(panelCenter, new Vector2(-82f, -148f), panelScale), standardButtonSize, panelScale);
+        CreatePanelButtonHitbox("Go Finish Button Hitbox", parent, manager, manager.finishButton, XRTrainingPanelAction.GoFinish, PanelWorldPoint(panelCenter, new Vector2(-252f, -148f), panelScale), finishButtonSize, panelScale);
 
         UnityEventTools.AddPersistentListener(manager.startTaskButton.onClick, manager.StartTask);
         UnityEventTools.AddPersistentListener(manager.resetButton.onClick, manager.ResetTask);
@@ -571,6 +578,27 @@ public static class XRTrainingSceneBuilder
         }
 
         return textMesh;
+    }
+
+    static XRTrainingPanelButton CreatePanelButtonHitbox(string name, Transform parent, XRTrainingManager manager, Button visualButton, XRTrainingPanelAction action, Vector3 position, Vector2 pixelSize, float panelScale)
+    {
+        var hitboxObject = new GameObject(name);
+        hitboxObject.transform.SetParent(parent, false);
+        hitboxObject.transform.localPosition = position;
+        hitboxObject.transform.localRotation = Quaternion.identity;
+
+        var collider = hitboxObject.AddComponent<BoxCollider>();
+        collider.isTrigger = true;
+        collider.size = new Vector3(pixelSize.x * panelScale, pixelSize.y * panelScale, 0.08f);
+
+        var interactable = hitboxObject.AddComponent<XRSimpleInteractable>();
+        interactable.interactionLayers = InteractionLayerMask.GetMask("Default");
+
+        var panelButton = hitboxObject.AddComponent<XRTrainingPanelButton>();
+        panelButton.manager = manager;
+        panelButton.visualButton = visualButton;
+        panelButton.action = action;
+        return panelButton;
     }
 
     static GameObject CreateUIImage(string name, Transform parent, Vector2 size, Vector2 anchoredPosition, Color color)

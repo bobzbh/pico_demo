@@ -42,7 +42,7 @@ public sealed class XRTrainingMouseGrabber : MonoBehaviour
         }
 
         if (mouse.leftButton.wasPressedThisFrame)
-            TryBeginGrab(mouse.position.ReadValue());
+            TryHandlePrimaryPress(mouse.position.ReadValue());
 
         if (m_Held != null)
         {
@@ -53,12 +53,23 @@ public sealed class XRTrainingMouseGrabber : MonoBehaviour
         }
     }
 
-    void TryBeginGrab(Vector2 screenPosition)
+    void TryHandlePrimaryPress(Vector2 screenPosition)
     {
         if (eventCamera == null)
             return;
 
         Ray ray = eventCamera.ScreenPointToRay(screenPosition);
+        if (TryClickPanelButton(ray))
+            return;
+
+        TryBeginGrab(ray, screenPosition);
+    }
+
+    void TryBeginGrab(Ray ray, Vector2 screenPosition)
+    {
+        if (eventCamera == null)
+            return;
+
         if (!TryFindGrabbable(ray, out var grabbable, out var hitPoint))
         {
             if (manager != null && manager.CurrentState == XRTrainingTaskState.Running)
@@ -88,6 +99,26 @@ public sealed class XRTrainingMouseGrabber : MonoBehaviour
         }
 
         UpdateGrab(screenPosition);
+    }
+
+    bool TryClickPanelButton(Ray ray)
+    {
+        RaycastHit[] hits = Physics.RaycastAll(ray, maxRayDistance, raycastMask, QueryTriggerInteraction.Collide);
+        if (hits == null || hits.Length == 0)
+            return false;
+
+        Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
+        foreach (var hit in hits)
+        {
+            var panelButton = hit.collider != null ? hit.collider.GetComponentInParent<XRTrainingPanelButton>() : null;
+            if (panelButton == null || !panelButton.gameObject.activeInHierarchy)
+                continue;
+
+            panelButton.InvokeAction();
+            return true;
+        }
+
+        return false;
     }
 
     void UpdateGrab(Vector2 screenPosition)
