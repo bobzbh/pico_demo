@@ -22,11 +22,13 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
     string m_TrialId;
     string m_Difficulty;
     string m_DifficultyLabel;
+    string m_TrialStartedAtUtc;
     int m_TrialNumber;
     float m_PoseAccumulator;
 
     public string EventFilePath { get; private set; }
     public string TrajectoryFilePath { get; private set; }
+    public string SummaryFilePath { get; private set; }
     public string OutputRootPath { get; private set; }
     public bool IsRecording => m_EventWriter != null || m_TrajectoryWriter != null;
 
@@ -49,16 +51,21 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
         m_DifficultyLabel = difficultyLabel;
         m_PoseAccumulator = 0f;
 
+        DateTime startUtc = DateTime.UtcNow;
+        m_TrialStartedAtUtc = startUtc.ToString("o", CultureInfo.InvariantCulture);
         string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmssfff", CultureInfo.InvariantCulture);
         string root = ResolveOutputRoot();
         OutputRootPath = root;
         string eventDirectory = Path.Combine(root, "Events");
         string trajectoryDirectory = Path.Combine(root, "Trajectories");
+        string summaryDirectory = Path.Combine(root, "Summaries");
         Directory.CreateDirectory(eventDirectory);
         Directory.CreateDirectory(trajectoryDirectory);
+        Directory.CreateDirectory(summaryDirectory);
 
         EventFilePath = UniquePath(Path.Combine(eventDirectory, $"{Clean(m_UserId)}_{Clean(m_TaskId)}_{m_TrialNumber:000}_{Clean(m_Difficulty)}_{timestamp}_events.csv"));
         TrajectoryFilePath = UniquePath(Path.Combine(trajectoryDirectory, $"{Clean(m_UserId)}_{Clean(m_TaskId)}_{m_TrialNumber:000}_{Clean(m_Difficulty)}_{timestamp}_trajectory.csv"));
+        SummaryFilePath = UniquePath(Path.Combine(summaryDirectory, $"{Clean(m_UserId)}_{Clean(m_TaskId)}_{m_TrialNumber:000}_{Clean(m_Difficulty)}_{timestamp}_summary.csv"));
 
         m_EventWriter = new StreamWriter(EventFilePath, false, new UTF8Encoding(true));
         m_EventWriter.WriteLine("Timestamp,UserID,TaskID,TrialID,TrialNumber,Difficulty,DifficultyLabel,TaskState,EventType,ObjectName,PositionX,PositionY,PositionZ,ElapsedSeconds,FinalScore,Success,CorrectCount,WrongCount,GrabCount,ReleaseCount,TeleportCount,ResetCount,Details");
@@ -103,6 +110,76 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
 
         m_EventWriter.WriteLine(CsvLine(columns));
         m_EventWriter.Flush();
+    }
+
+    public void WriteTrialSummary(XRTrainingTaskState taskState, XRTrainingRuntimeStats stats, string resultEventType, string details)
+    {
+        if (string.IsNullOrEmpty(SummaryFilePath))
+            return;
+
+        string[] header =
+        {
+            "StartTimestamp",
+            "EndTimestamp",
+            "UserID",
+            "TaskID",
+            "TrialID",
+            "TrialNumber",
+            "Difficulty",
+            "DifficultyLabel",
+            "TaskState",
+            "ResultEventType",
+            "Success",
+            "TotalSeconds",
+            "FinalScore",
+            "CorrectCount",
+            "WrongCount",
+            "GrabCount",
+            "ReleaseCount",
+            "TeleportCount",
+            "ResetCount",
+            "EventFile",
+            "TrajectoryFile",
+            "Details"
+        };
+
+        string[] columns =
+        {
+            m_TrialStartedAtUtc,
+            DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture),
+            m_UserId,
+            m_TaskId,
+            m_TrialId,
+            m_TrialNumber.ToString(CultureInfo.InvariantCulture),
+            m_Difficulty,
+            m_DifficultyLabel,
+            taskState.ToString(),
+            resultEventType ?? string.Empty,
+            stats.success ? "true" : "false",
+            stats.elapsedSeconds.ToString("F4", CultureInfo.InvariantCulture),
+            stats.score.ToString(CultureInfo.InvariantCulture),
+            stats.correctPlacements.ToString(CultureInfo.InvariantCulture),
+            stats.wrongPlacements.ToString(CultureInfo.InvariantCulture),
+            stats.grabCount.ToString(CultureInfo.InvariantCulture),
+            stats.releaseCount.ToString(CultureInfo.InvariantCulture),
+            stats.teleportCount.ToString(CultureInfo.InvariantCulture),
+            stats.resetCount.ToString(CultureInfo.InvariantCulture),
+            EventFilePath ?? string.Empty,
+            TrajectoryFilePath ?? string.Empty,
+            details ?? string.Empty
+        };
+
+        using (var writer = new StreamWriter(SummaryFilePath, false, new UTF8Encoding(true)))
+        {
+            writer.WriteLine(CsvLine(header));
+            writer.WriteLine(CsvLine(columns));
+        }
+    }
+
+    public void CompleteTrial(XRTrainingTaskState taskState, XRTrainingRuntimeStats stats, string resultEventType, string details)
+    {
+        WriteTrialSummary(taskState, stats, resultEventType, details);
+        EndTrial();
     }
 
     public void TickPoseRecording(XRTrainingTaskState taskState, float elapsedSeconds)

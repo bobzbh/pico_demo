@@ -130,8 +130,11 @@ public sealed class XRTrainingManager : MonoBehaviour
 
         if (m_TrialRecordingActive)
         {
+            StopTimer();
+            m_Stats.success = false;
+            m_Stats.resetCount++;
             LogEvent(XRTrainingEventType.TaskReset, "Reset", Vector3.zero, "manual restart");
-            dataLogger?.EndTrial();
+            dataLogger?.CompleteTrial(CurrentState, m_Stats, XRTrainingEventType.TaskReset.ToString(), "manual restart");
             m_TrialRecordingActive = false;
         }
 
@@ -204,8 +207,8 @@ public sealed class XRTrainingManager : MonoBehaviour
             return;
 
         m_Stats.releaseCount++;
-        EvaluatePlacement(grabbable);
         LogEvent(XRTrainingEventType.ObjectRelease, grabbable.displayName, grabbable.transform.position, "release");
+        EvaluatePlacement(grabbable);
         RefreshUI();
     }
 
@@ -303,7 +306,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         EnterState(XRTrainingTaskState.Failed, "Task failed: " + FailureStatusText(reason));
         SetText(completionText, completionMeshText, "State: Failed. Click Reset to try again.");
         LogEvent(XRTrainingEventType.TaskFailed, "Failed", Vector3.zero, reason);
-        dataLogger?.EndTrial();
+        dataLogger?.CompleteTrial(CurrentState, m_Stats, XRTrainingEventType.TaskFailed.ToString(), reason);
         m_TrialRecordingActive = false;
         RefreshUI();
     }
@@ -420,6 +423,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         EnterState(XRTrainingTaskState.Completed, "Task complete. Finish unlocked. Go to Finish for results.");
         SetText(completionText, completionMeshText, "State: Completed. Finish unlocked.");
         LogEvent(XRTrainingEventType.TaskComplete, "Complete", Vector3.zero, "all cubes matched");
+        dataLogger?.WriteTrialSummary(CurrentState, m_Stats, XRTrainingEventType.TaskComplete.ToString(), "all cubes matched");
         RefreshUI();
     }
 
@@ -447,7 +451,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         SetText(completionText, completionMeshText, "State: Results. Score " + m_Stats.correctPlacements + " / " + RequiredScore() + ", Time " + TimerText() + ".");
         LogEvent(XRTrainingEventType.TaskEnded, "Finish", finishPosition, "finish reached");
         LogEvent(XRTrainingEventType.ResultsShown, "Results", finishPosition, "score=" + m_Stats.correctPlacements);
-        dataLogger?.EndTrial();
+        dataLogger?.CompleteTrial(CurrentState, m_Stats, XRTrainingEventType.TaskEnded.ToString(), "finish reached");
         m_TrialRecordingActive = false;
         RefreshUI();
     }
