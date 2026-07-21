@@ -82,6 +82,11 @@ public static class XRTrainingSceneBuilder
         teleportTracker.Configure(manager, manager.xrOrigin);
         manager.teleportTracker = teleportTracker;
 
+        var mouseGrabber = managerObject.AddComponent<XRTrainingMouseGrabber>();
+        mouseGrabber.manager = manager;
+        mouseGrabber.eventCamera = mainCamera;
+        mouseGrabber.autoStartOnMouseGrab = true;
+
         CreateTeleportPlatform("Start Zone", zonesRoot, new Vector3(0f, -0.05f, 0f), new Vector3(2.4f, 0.1f, 2.0f), start, true, teleportationProvider);
         CreateTeleportPlatform("Operation Zone", zonesRoot, new Vector3(0f, -0.05f, 4.2f), new Vector3(6.4f, 0.1f, 4.4f), operation, true, teleportationProvider);
         var finishZone = CreateTeleportPlatform("Finish Zone", zonesRoot, new Vector3(0f, -0.05f, 8.2f), new Vector3(2.5f, 0.1f, 2.0f), finish, false, teleportationProvider);

@@ -9,6 +9,7 @@ public sealed class XRTrainingMouseGrabber : MonoBehaviour
     public Camera eventCamera;
     public float maxRayDistance = 30f;
     public LayerMask raycastMask = ~0;
+    public bool autoStartOnMouseGrab = true;
 
     XRTrainingGrabbable m_Held;
     float m_HoldPlaneY;
@@ -40,14 +41,14 @@ public sealed class XRTrainingMouseGrabber : MonoBehaviour
             return;
         }
 
-        if (mouse.rightButton.wasPressedThisFrame)
+        if (mouse.leftButton.wasPressedThisFrame)
             TryBeginGrab(mouse.position.ReadValue());
 
         if (m_Held != null)
         {
             UpdateGrab(mouse.position.ReadValue());
 
-            if (mouse.rightButton.wasReleasedThisFrame)
+            if (mouse.leftButton.wasReleasedThisFrame)
                 ForceRelease();
         }
     }
@@ -61,10 +62,13 @@ public sealed class XRTrainingMouseGrabber : MonoBehaviour
         if (!TryFindGrabbable(ray, out var grabbable, out var hitPoint))
         {
             if (manager != null && manager.CurrentState == XRTrainingTaskState.Running)
-                manager.ReportInvalidObjectOperation(null, "Point at a cube, then hold RIGHT MOUSE.");
+                manager.ReportInvalidObjectOperation(null, "Point at a cube, then hold LEFT MOUSE.");
 
             return;
         }
+
+        if (autoStartOnMouseGrab && manager != null && manager.CurrentState == XRTrainingTaskState.WaitingToStart)
+            manager.StartTask();
 
         if (grabbable == null || !grabbable.TryBeginManualGrab())
             return;
