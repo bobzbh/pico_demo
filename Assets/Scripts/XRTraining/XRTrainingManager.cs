@@ -22,6 +22,7 @@ public sealed class XRTrainingManager : MonoBehaviour
 
     [Header("Task Flow")]
     public float instructionSeconds = 1f;
+    public float timeLimitSeconds = 5f;
     public string userId = "P001";
     public string taskId = "ColorBlockTask";
     public XRTrainingDifficultyConfig difficultyConfig = new XRTrainingDifficultyConfig();
@@ -56,6 +57,7 @@ public sealed class XRTrainingManager : MonoBehaviour
     float m_TaskStartTime;
     float m_StateEnteredTime;
     int m_TrialNumber;
+    string m_FailureReason = "";
 
     public XRTrainingTaskState CurrentState { get; private set; } = XRTrainingTaskState.WaitingToStart;
     public bool CanInteractWithObjects => CurrentState == XRTrainingTaskState.Running;
@@ -263,6 +265,7 @@ public sealed class XRTrainingManager : MonoBehaviour
 
         StopTimer();
         m_Stats.success = false;
+        m_FailureReason = reason;
         SetAllObjectInteraction(false);
         SetFinishUnlocked(false);
         EnterState(XRTrainingTaskState.Failed, "Task failed: " + reason);
@@ -294,8 +297,8 @@ public sealed class XRTrainingManager : MonoBehaviour
         m_TimerRunning = true;
         SetAllObjectInteraction(true);
         SetFinishUnlocked(false);
-        EnterState(XRTrainingTaskState.Running, "Task running. Grab cubes and place them on matching targets.");
-        LogEvent(XRTrainingEventType.TaskStart, "TaskStart", Vector3.zero, "timer started");
+        EnterState(XRTrainingTaskState.Running, "Task running. Grab cubes and place them on matching targets before time runs out.");
+        LogEvent(XRTrainingEventType.TaskStart, "TaskStart", Vector3.zero, "timer started; limit=" + TimerLimitText());
         RefreshUI();
     }
 
@@ -305,6 +308,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         m_TimerRunning = false;
         m_CompletionEventLogged = false;
         m_ResultsEventLogged = false;
+        m_FailureReason = "";
         SetAllObjectInteraction(false);
         ResetObjectsOnly();
         SetFinishUnlocked(false);
@@ -320,6 +324,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         m_TrialRecordingActive = false;
         m_CompletionEventLogged = false;
         m_ResultsEventLogged = false;
+        m_FailureReason = "";
         m_Stats.Clear();
 
         SetAllObjectInteraction(false);
@@ -405,7 +410,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         SetAllObjectInteraction(false);
         SetFinishUnlocked(true);
         EnterState(XRTrainingTaskState.Results, "Results shown. Click Reset to run another round.");
-        SetText(completionText, completionMeshText, "State: Results. Score " + m_Stats.correctPlacements + " / " + RequiredScore() + ", Time " + FormatTime(m_Stats.elapsedSeconds) + ".");
+        SetText(completionText, completionMeshText, "State: Results. Score " + m_Stats.correctPlacements + " / " + RequiredScore() + ", Time " + TimerText() + ".");
         LogEvent(XRTrainingEventType.TaskEnded, "Finish", finishPosition, "finish reached");
         LogEvent(XRTrainingEventType.ResultsShown, "Results", finishPosition, "score=" + m_Stats.correctPlacements);
         dataLogger?.EndTrial();
@@ -580,7 +585,13 @@ public sealed class XRTrainingManager : MonoBehaviour
         if (!m_TimerRunning)
             return;
 
-        m_Stats.elapsedSeconds = Mathf.Max(0f, Time.unscaledTime - m_TaskStartTime);
+        m_Stats.elapsedSeconds = CurrentElapsedSeconds();
+        if (HasTimeLimit() && m_Stats.elapsedSeconds >= timeLimitSeconds && !TaskSolved)
+        {
+            FailTask("Time limit reached before all cubes were matched.");
+            return;
+        }
+
         dataLogger?.TickPoseRecording(CurrentState, m_Stats.elapsedSeconds);
         RefreshUI();
     }
@@ -590,7 +601,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         if (!m_TimerRunning)
             return;
 
-        m_Stats.elapsedSeconds = Mathf.Max(0f, Time.unscaledTime - m_TaskStartTime);
+        m_Stats.elapsedSeconds = CurrentElapsedSeconds();
         m_TimerRunning = false;
         dataLogger?.WritePoseSample(CurrentState, m_Stats.elapsedSeconds);
     }
@@ -626,7 +637,7 @@ public sealed class XRTrainingManager : MonoBehaviour
 
     void RefreshUI()
     {
-        SetText(scoreText, scoreMeshText, "Score: " + m_Stats.correctPlacements + " / " + RequiredScore() + "   Time: " + FormatTime(m_Stats.elapsedSeconds));
+        SetText(scoreText, scoreMeshText, "Score: " + m_Stats.correctPlacements + " / " + RequiredScore() + "   Time: " + TimerText());
         SetText(completionText, completionMeshText, CompletionTextForState());
 
         if (startTaskButton != null)
@@ -649,15 +660,15 @@ public sealed class XRTrainingManager : MonoBehaviour
             case XRTrainingTaskState.WaitingToStart:
                 return "State: Waiting to start.";
             case XRTrainingTaskState.Instructions:
-                return "State: Instructions. Starting soon.";
+                return "State: Instructions. Starting soon. Limit " + TimerLimitText() + ".";
             case XRTrainingTaskState.Running:
-                return "State: Running. Match all cubes.";
+                return "State: Running. Match all cubes before " + TimerLimitText() + ".";
             case XRTrainingTaskState.Completed:
                 return "State: Completed. Finish unlocked.";
             case XRTrainingTaskState.Failed:
-                return "State: Failed. Click Reset.";
+                return "State: Failed. " + FailureText() + " Click Reset.";
             case XRTrainingTaskState.Results:
-                return "State: Results. Score " + m_Stats.correctPlacements + " / " + RequiredScore() + ", Time " + FormatTime(m_Stats.elapsedSeconds) + ".";
+                return "State: Results. Score " + m_Stats.correctPlacements + " / " + RequiredScore() + ", Time " + TimerText() + ".";
             case XRTrainingTaskState.Restarting:
                 return "State: Restarting.";
             default:
@@ -673,6 +684,32 @@ public sealed class XRTrainingManager : MonoBehaviour
     void LogEvent(XRTrainingEventType eventType, string objectName, Vector3 position, string details)
     {
         dataLogger?.LogEvent(eventType, CurrentState, objectName, position, m_Stats.elapsedSeconds, m_Stats, details);
+    }
+
+    float CurrentElapsedSeconds()
+    {
+        float elapsed = Mathf.Max(0f, Time.unscaledTime - m_TaskStartTime);
+        return HasTimeLimit() ? Mathf.Min(elapsed, timeLimitSeconds) : elapsed;
+    }
+
+    bool HasTimeLimit()
+    {
+        return timeLimitSeconds > 0f;
+    }
+
+    string TimerText()
+    {
+        return HasTimeLimit() ? FormatTime(m_Stats.elapsedSeconds) + " / " + TimerLimitText() : FormatTime(m_Stats.elapsedSeconds);
+    }
+
+    string TimerLimitText()
+    {
+        return HasTimeLimit() ? FormatTime(timeLimitSeconds) : "unlimited";
+    }
+
+    string FailureText()
+    {
+        return string.IsNullOrEmpty(m_FailureReason) ? "Task failed." : m_FailureReason;
     }
 
     static string FormatTime(float seconds)

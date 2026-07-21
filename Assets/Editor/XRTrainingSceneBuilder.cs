@@ -65,6 +65,8 @@ public static class XRTrainingSceneBuilder
         managerObject.transform.SetParent(flowRoot, false);
         var manager = managerObject.AddComponent<XRTrainingManager>();
         manager.trainingRoot = root.transform;
+        manager.instructionSeconds = 1f;
+        manager.timeLimitSeconds = 5f;
         manager.xrOrigin = origin != null ? origin.transform : null;
         manager.headTransform = mainCamera != null ? mainCamera.transform : null;
         manager.leftControllerTransform = FindTransform("XR Origin (XR Rig)/Camera Offset/Left Controller");
