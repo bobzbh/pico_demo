@@ -25,6 +25,7 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
     string m_DifficultyLabel;
     string m_TrialStartedAtUtc;
     int m_TrialNumber;
+    int m_PoseSampleIndex;
     float m_PoseAccumulator;
 
     public string EventFilePath { get; private set; }
@@ -50,6 +51,7 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
         m_TrialId = $"{m_TaskId}_{trialNumber:000}";
         m_Difficulty = difficulty.ToString();
         m_DifficultyLabel = difficultyLabel;
+        m_PoseSampleIndex = 0;
         m_PoseAccumulator = 0f;
 
         DateTime startUtc = DateTime.UtcNow;
@@ -73,7 +75,7 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
         m_EventWriter.Flush();
 
         m_TrajectoryWriter = new StreamWriter(TrajectoryFilePath, false, new UTF8Encoding(true));
-        m_TrajectoryWriter.WriteLine("Timestamp,UserID,TaskID,TrialID,TrialNumber,Difficulty,DifficultyLabel,TaskState,ElapsedSeconds,HeadPosX,HeadPosY,HeadPosZ,HeadRotX,HeadRotY,HeadRotZ,HeadRotW,LeftPosX,LeftPosY,LeftPosZ,LeftRotX,LeftRotY,LeftRotZ,LeftRotW,RightPosX,RightPosY,RightPosZ,RightRotX,RightRotY,RightRotZ,RightRotW");
+        m_TrajectoryWriter.WriteLine("Timestamp,SampleIndex,UserID,TaskID,TrialID,TrialNumber,Difficulty,DifficultyLabel,TaskState,ElapsedSeconds,HeadPosX,HeadPosY,HeadPosZ,HeadRotX,HeadRotY,HeadRotZ,HeadRotW,LeftPosX,LeftPosY,LeftPosZ,LeftRotX,LeftRotY,LeftRotZ,LeftRotW,RightPosX,RightPosY,RightPosZ,RightRotX,RightRotY,RightRotZ,RightRotW");
         m_TrajectoryWriter.Flush();
 
         PruneOldRecords();
@@ -193,11 +195,12 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
             return;
 
         m_PoseAccumulator += Time.unscaledDeltaTime;
-        if (m_PoseAccumulator < poseSampleIntervalSeconds)
+        float interval = Mathf.Max(0.02f, poseSampleIntervalSeconds);
+        if (m_PoseAccumulator < interval)
             return;
 
-        while (m_PoseAccumulator >= poseSampleIntervalSeconds)
-            m_PoseAccumulator -= poseSampleIntervalSeconds;
+        while (m_PoseAccumulator >= interval)
+            m_PoseAccumulator -= interval;
 
         WritePoseSample(taskState, elapsedSeconds);
     }
@@ -210,6 +213,7 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
         string[] columns =
         {
             DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture),
+            m_PoseSampleIndex.ToString(CultureInfo.InvariantCulture),
             m_UserId,
             m_TaskId,
             m_TrialId,
@@ -241,6 +245,7 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
             Rotation(rightControllerTransform, 3)
         };
 
+        m_PoseSampleIndex++;
         m_TrajectoryWriter.WriteLine(string.Join(",", columns));
         m_TrajectoryWriter.Flush();
     }

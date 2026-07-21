@@ -334,6 +334,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         SetFinishUnlocked(false);
         EnterState(XRTrainingTaskState.Running, "Task running. Grab cubes and place them on matching targets before time runs out.");
         LogEvent(XRTrainingEventType.TaskStart, "TaskStart", Vector3.zero, "timer started; limit=" + TimerLimitText());
+        dataLogger?.WritePoseSample(CurrentState, m_Stats.elapsedSeconds);
         RefreshUI();
     }
 
