@@ -2,5 +2,6 @@ public enum XRTrainingColorId
 {
     Red,
     Green,
-    Blue
+    Blue,
+    Yellow
 }

@@ -7,6 +7,8 @@ using UnityEngine.XR.Interaction.Toolkit.Interactors;
 public enum XRTrainingPanelAction
 {
     Start,
+    EasyDifficulty,
+    NormalDifficulty,
     Reset,
     ToggleLight,
     GoFinish
@@ -65,6 +67,12 @@ public sealed class XRTrainingPanelButton : MonoBehaviour
         {
             case XRTrainingPanelAction.Start:
                 manager.StartTask();
+                break;
+            case XRTrainingPanelAction.EasyDifficulty:
+                manager.SelectEasyDifficulty();
+                break;
+            case XRTrainingPanelAction.NormalDifficulty:
+                manager.SelectNormalDifficulty();
                 break;
             case XRTrainingPanelAction.Reset:
                 manager.ResetTask();

@@ -34,13 +34,17 @@ public sealed class XRTrainingManager : MonoBehaviour
     [Header("World UI")]
     public Text selectedObjectText;
     public Text scoreText;
+    public Text difficultyText;
     public Text statusText;
     public Text completionText;
     public TextMesh selectedObjectMeshText;
     public TextMesh scoreMeshText;
+    public TextMesh difficultyMeshText;
     public TextMesh statusMeshText;
     public TextMesh completionMeshText;
     public Button startTaskButton;
+    public Button easyDifficultyButton;
+    public Button normalDifficultyButton;
     public Button resetButton;
     public Button lightButton;
     public Button finishButton;
@@ -132,6 +136,34 @@ public sealed class XRTrainingManager : MonoBehaviour
         }
 
         ResetTaskInternal(true);
+    }
+
+    public void SelectEasyDifficulty()
+    {
+        SelectDifficulty(XRTrainingDifficulty.Easy);
+    }
+
+    public void SelectNormalDifficulty()
+    {
+        SelectDifficulty(XRTrainingDifficulty.Normal);
+    }
+
+    public void SelectDifficulty(XRTrainingDifficulty difficulty)
+    {
+        ResolveReferences();
+
+        if (!CanChangeDifficulty())
+        {
+            ShowStatus("Difficulty can be changed before a task starts.");
+            RefreshUI();
+            return;
+        }
+
+        difficultyConfig = CreateDifficultyConfig(difficulty);
+        timeLimitSeconds = difficultyConfig.timeLimitSeconds;
+        ResetTaskInternal(true);
+        ShowStatus("Difficulty set: " + DifficultyLabel() + ".");
+        RefreshUI();
     }
 
     public void ToggleLight()
@@ -304,6 +336,7 @@ public sealed class XRTrainingManager : MonoBehaviour
 
     void PrepareRoundForStart()
     {
+        ApplyDifficultyLayout();
         m_Stats.Clear();
         m_TimerRunning = false;
         m_CompletionEventLogged = false;
@@ -318,6 +351,7 @@ public sealed class XRTrainingManager : MonoBehaviour
     void ResetTaskInternal(bool userInitiated)
     {
         ResolveReferences();
+        ApplyDifficultyLayout();
         CaptureStartState();
         StopTimer();
         dataLogger?.EndTrial();
@@ -470,7 +504,10 @@ public sealed class XRTrainingManager : MonoBehaviour
             return;
 
         foreach (var grabbable in grabbables)
-            grabbable?.SetInteractionEnabled(enabled);
+        {
+            if (grabbable != null && grabbable.gameObject.activeInHierarchy)
+                grabbable.SetInteractionEnabled(enabled);
+        }
     }
 
     void SetFinishUnlocked(bool unlocked)
@@ -561,7 +598,7 @@ public sealed class XRTrainingManager : MonoBehaviour
 
         m_TrialNumber++;
         XRTrainingDifficulty difficulty = difficultyConfig != null ? difficultyConfig.difficulty : XRTrainingDifficulty.Easy;
-        string label = difficultyConfig != null ? difficultyConfig.displayName : "Basic";
+        string label = DifficultyLabel();
         dataLogger.BeginTrial(userId, taskId, m_TrialNumber, difficulty, label);
         m_TrialRecordingActive = true;
     }
@@ -606,6 +643,60 @@ public sealed class XRTrainingManager : MonoBehaviour
         dataLogger?.WritePoseSample(CurrentState, m_Stats.elapsedSeconds);
     }
 
+    void ApplyDifficultyLayout()
+    {
+        difficultyConfig = difficultyConfig ?? XRTrainingDifficultyConfig.Easy();
+        timeLimitSeconds = difficultyConfig.timeLimitSeconds;
+
+        int activeCount = ActiveBlockCount();
+        bool normal = CurrentDifficulty() == XRTrainingDifficulty.Normal;
+        float cubeSpacing = normal ? 1.32f : 1.05f;
+        float targetSpacing = normal ? 1.55f : 1.05f;
+        float cubeZ = normal ? 3.25f : 3.75f;
+        float targetZ = normal ? 6.1f : 5.55f;
+
+        if (grabbables != null)
+        {
+            for (int i = 0; i < grabbables.Length; i++)
+            {
+                var grabbable = grabbables[i];
+                if (grabbable == null)
+                    continue;
+
+                bool active = i < activeCount;
+                grabbable.gameObject.SetActive(active);
+                if (!active)
+                    continue;
+
+                Vector3 position = new Vector3(CenteredOffset(i, activeCount, cubeSpacing), 0.55f, cubeZ + NormalDepthOffset(i));
+                grabbable.transform.SetPositionAndRotation(position, Quaternion.identity);
+                grabbable.CaptureInitialState();
+                grabbable.SetInteractionEnabled(false);
+            }
+        }
+
+        if (targetZones != null)
+        {
+            for (int i = 0; i < targetZones.Length; i++)
+            {
+                var zone = targetZones[i];
+                if (zone == null)
+                    continue;
+
+                bool active = i < activeCount;
+                zone.SetLayoutActive(active);
+                if (!active)
+                    continue;
+
+                Vector3 position = new Vector3(CenteredOffset(i, activeCount, targetSpacing), 0.08f, targetZ);
+                zone.transform.position = position;
+                zone.transform.localScale = new Vector3(0.85f, 0.08f, 0.85f);
+                zone.ResetFeedback();
+                zone.UpdateLabelPosition(position + new Vector3(0f, 0.08f, -0.48f));
+            }
+        }
+    }
+
     XRTrainingTargetZone FindContainingTarget(Vector3 position)
     {
         if (targetZones == null)
@@ -613,7 +704,7 @@ public sealed class XRTrainingManager : MonoBehaviour
 
         foreach (var targetZone in targetZones)
         {
-            if (targetZone != null && targetZone.ContainsPoint(position))
+            if (targetZone != null && targetZone.gameObject.activeInHierarchy && targetZone.ContainsPoint(position))
                 return targetZone;
         }
 
@@ -627,7 +718,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         {
             foreach (var grabbable in grabbables)
             {
-                if (grabbable != null)
+                if (grabbable != null && grabbable.gameObject.activeInHierarchy)
                     count++;
             }
         }
@@ -635,13 +726,71 @@ public sealed class XRTrainingManager : MonoBehaviour
         return Mathf.Max(1, count);
     }
 
+    int ActiveBlockCount()
+    {
+        int available = Mathf.Min(grabbables != null ? grabbables.Length : 0, targetZones != null ? targetZones.Length : 0);
+        int configured = difficultyConfig != null ? difficultyConfig.blockCount : 3;
+        return Mathf.Clamp(configured, 1, Mathf.Max(1, available));
+    }
+
+    bool CanChangeDifficulty()
+    {
+        return CurrentState == XRTrainingTaskState.WaitingToStart || CurrentState == XRTrainingTaskState.Failed || CurrentState == XRTrainingTaskState.Results;
+    }
+
+    XRTrainingDifficulty CurrentDifficulty()
+    {
+        return difficultyConfig != null ? difficultyConfig.difficulty : XRTrainingDifficulty.Easy;
+    }
+
+    string DifficultyLabel()
+    {
+        return difficultyConfig != null && !string.IsNullOrEmpty(difficultyConfig.displayName) ? difficultyConfig.displayName : CurrentDifficulty().ToString();
+    }
+
+    string DifficultyDisplayText()
+    {
+        return "Difficulty: " + DifficultyLabel() + "   Blocks: " + ActiveBlockCount();
+    }
+
+    static XRTrainingDifficultyConfig CreateDifficultyConfig(XRTrainingDifficulty difficulty)
+    {
+        switch (difficulty)
+        {
+            case XRTrainingDifficulty.Normal:
+                return XRTrainingDifficultyConfig.Normal();
+            case XRTrainingDifficulty.Hard:
+                return XRTrainingDifficultyConfig.Hard();
+            default:
+                return XRTrainingDifficultyConfig.Easy();
+        }
+    }
+
+    static float CenteredOffset(int index, int count, float spacing)
+    {
+        return (index - (count - 1) * 0.5f) * spacing;
+    }
+
+    static float NormalDepthOffset(int index)
+    {
+        return index % 2 == 0 ? 0f : 0.32f;
+    }
+
     void RefreshUI()
     {
         SetText(scoreText, scoreMeshText, "Score: " + m_Stats.correctPlacements + " / " + RequiredScore() + "   Time: " + TimerText());
+        SetText(difficultyText, difficultyMeshText, DifficultyDisplayText());
         SetText(completionText, completionMeshText, CompletionTextForState());
 
         if (startTaskButton != null)
             startTaskButton.interactable = CurrentState == XRTrainingTaskState.WaitingToStart || CurrentState == XRTrainingTaskState.Failed || CurrentState == XRTrainingTaskState.Results;
+
+        bool canChangeDifficulty = CanChangeDifficulty();
+        if (easyDifficultyButton != null)
+            easyDifficultyButton.interactable = canChangeDifficulty && CurrentDifficulty() != XRTrainingDifficulty.Easy;
+
+        if (normalDifficultyButton != null)
+            normalDifficultyButton.interactable = canChangeDifficulty && CurrentDifficulty() != XRTrainingDifficulty.Normal;
 
         if (resetButton != null)
             resetButton.interactable = true;

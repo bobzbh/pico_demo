@@ -6,6 +6,7 @@ public sealed class XRTrainingTargetZone : MonoBehaviour
 {
     public XRTrainingColorId colorId;
     public XRTrainingManager manager;
+    public GameObject labelObject;
 
     Renderer[] m_Renderers;
     Color[] m_BaseColors;
@@ -67,6 +68,19 @@ public sealed class XRTrainingTargetZone : MonoBehaviour
             CaptureBaseColors();
 
         RestoreBaseColors();
+    }
+
+    public void SetLayoutActive(bool active)
+    {
+        gameObject.SetActive(active);
+        if (labelObject != null)
+            labelObject.SetActive(active);
+    }
+
+    public void UpdateLabelPosition(Vector3 worldPosition)
+    {
+        if (labelObject != null)
+            labelObject.transform.position = worldPosition;
     }
 
     void Flash(Color color)

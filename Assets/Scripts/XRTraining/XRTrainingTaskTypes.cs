@@ -42,10 +42,11 @@ public enum XRTrainingEventType
 public sealed class XRTrainingDifficultyConfig
 {
     public XRTrainingDifficulty difficulty = XRTrainingDifficulty.Easy;
-    public string displayName = "Basic";
+    public string displayName = "Easy";
     public int blockCount = 3;
     public int scorePerCorrect = 1;
     public int penaltyPerWrong = 0;
+    public float timeLimitSeconds = 5f;
 
     public static XRTrainingDifficultyConfig Easy()
     {
@@ -54,12 +55,12 @@ public sealed class XRTrainingDifficultyConfig
 
     public static XRTrainingDifficultyConfig Normal()
     {
-        return new XRTrainingDifficultyConfig { difficulty = XRTrainingDifficulty.Normal, displayName = "Normal" };
+        return new XRTrainingDifficultyConfig { difficulty = XRTrainingDifficulty.Normal, displayName = "Normal", blockCount = 4, timeLimitSeconds = 8f };
     }
 
     public static XRTrainingDifficultyConfig Hard()
     {
-        return new XRTrainingDifficultyConfig { difficulty = XRTrainingDifficulty.Hard, displayName = "Hard" };
+        return new XRTrainingDifficultyConfig { difficulty = XRTrainingDifficulty.Hard, displayName = "Hard", blockCount = 4, timeLimitSeconds = 5f };
     }
 }
 
