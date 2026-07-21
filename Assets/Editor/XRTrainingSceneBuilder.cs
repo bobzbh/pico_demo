@@ -66,6 +66,7 @@ public static class XRTrainingSceneBuilder
         managerObject.transform.SetParent(flowRoot, false);
         var manager = managerObject.AddComponent<XRTrainingManager>();
         manager.trainingRoot = root.transform;
+        manager.panelRoot = uiRoot;
         manager.instructionSeconds = 1f;
         manager.difficultyConfig = XRTrainingDifficultyConfig.Easy();
         manager.timeLimitSeconds = manager.difficultyConfig.timeLimitSeconds;

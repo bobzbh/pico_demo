@@ -18,11 +18,14 @@ public sealed class XRTrainingManager : MonoBehaviour
     public Transform leftRayTransform;
     public Transform rightRayTransform;
     public Transform trainingRoot;
+    public Transform panelRoot;
     public Light sceneLight;
 
     [Header("Task Flow")]
     public float instructionSeconds = 1f;
     public float timeLimitSeconds = 5f;
+    public float resultPanelDistance = 2f;
+    public float resultPanelHeightOffset = 0.02f;
     public string userId = "P001";
     public string taskId = "ColorBlockTask";
     public XRTrainingDifficultyConfig difficultyConfig = new XRTrainingDifficultyConfig();
@@ -52,7 +55,11 @@ public sealed class XRTrainingManager : MonoBehaviour
     readonly XRTrainingRuntimeStats m_Stats = new XRTrainingRuntimeStats();
     Vector3 m_InitialOriginPosition;
     Quaternion m_InitialOriginRotation;
+    Vector3 m_InitialPanelLocalPosition;
+    Quaternion m_InitialPanelLocalRotation;
+    Vector3 m_InitialPanelLocalScale;
     bool m_HasCapturedStart;
+    bool m_HasCapturedPanel;
     bool m_HasAlignedScene;
     bool m_TimerRunning;
     bool m_TrialRecordingActive;
@@ -329,6 +336,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         SetAllObjectInteraction(false);
         SetFinishUnlocked(false);
         EnterState(XRTrainingTaskState.Failed, "Task failed: " + FailureStatusText(reason));
+        PlaceResultPanelInFrontOfHead();
         SetText(completionText, completionMeshText, "State: Failed. Click Reset to try again.");
         LogEvent(XRTrainingEventType.TaskFailed, "Failed", Vector3.zero, reason);
         dataLogger?.CompleteTrial(CurrentState, m_Stats, XRTrainingEventType.TaskFailed.ToString(), reason);
@@ -374,6 +382,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         SetAllObjectInteraction(false);
         ResetObjectsOnly();
         SetFinishUnlocked(false);
+        RestorePanelPlacement();
         MoveOrigin(m_InitialOriginPosition, m_InitialOriginRotation);
     }
 
@@ -393,6 +402,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         SetAllObjectInteraction(false);
         ResetObjectsOnly();
         SetFinishUnlocked(false);
+        RestorePanelPlacement();
         MoveOrigin(m_InitialOriginPosition, m_InitialOriginRotation);
 
         SetText(selectedObjectText, selectedObjectMeshText, "Selected: none");
@@ -474,6 +484,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         SetAllObjectInteraction(false);
         SetFinishUnlocked(true);
         EnterState(XRTrainingTaskState.Results, "Results shown. Click Reset to run another round.");
+        PlaceResultPanelInFrontOfHead();
         SetText(completionText, completionMeshText, "State: Results. Score " + m_Stats.correctPlacements + " / " + RequiredScore() + ", Time " + TimerText() + ".");
         LogEvent(XRTrainingEventType.TaskEnded, "Finish", finishPosition, "finish reached");
         LogEvent(XRTrainingEventType.ResultsShown, "Results", finishPosition, "score=" + m_Stats.correctPlacements);
@@ -576,12 +587,65 @@ public sealed class XRTrainingManager : MonoBehaviour
         m_InitialOriginPosition = xrOrigin.position;
         m_InitialOriginRotation = xrOrigin.rotation;
         m_HasCapturedStart = true;
+        CapturePanelState();
 
         if (grabbables == null)
             return;
 
         foreach (var grabbable in grabbables)
             grabbable?.CaptureInitialState();
+    }
+
+    void CapturePanelState()
+    {
+        if (m_HasCapturedPanel || panelRoot == null)
+            return;
+
+        m_InitialPanelLocalPosition = panelRoot.localPosition;
+        m_InitialPanelLocalRotation = panelRoot.localRotation;
+        m_InitialPanelLocalScale = panelRoot.localScale;
+        m_HasCapturedPanel = true;
+    }
+
+    void RestorePanelPlacement()
+    {
+        ResolveReferences();
+        if (panelRoot == null)
+            return;
+
+        CapturePanelState();
+        panelRoot.localPosition = m_InitialPanelLocalPosition;
+        panelRoot.localRotation = m_InitialPanelLocalRotation;
+        panelRoot.localScale = m_InitialPanelLocalScale;
+    }
+
+    void PlaceResultPanelInFrontOfHead()
+    {
+        ResolveReferences();
+        if (panelRoot == null || headTransform == null)
+            return;
+
+        CapturePanelState();
+
+        Vector3 forward = Vector3.ProjectOnPlane(headTransform.forward, Vector3.up);
+        if (forward.sqrMagnitude < 0.001f)
+            forward = Vector3.ProjectOnPlane(panelRoot.forward, Vector3.up);
+
+        if (forward.sqrMagnitude < 0.001f)
+            forward = Vector3.forward;
+
+        forward.Normalize();
+        Quaternion rotation = Quaternion.LookRotation(forward, Vector3.up);
+        Vector3 localPanelCenter = ResultPanelLocalCenter();
+        Vector3 panelCenter = headTransform.position + forward * Mathf.Max(1.2f, resultPanelDistance);
+        panelCenter.y = headTransform.position.y + resultPanelHeightOffset;
+        panelRoot.SetPositionAndRotation(panelCenter - rotation * localPanelCenter, rotation);
+    }
+
+    Vector3 ResultPanelLocalCenter()
+    {
+        Transform panel = FindChildByName(panelRoot, "VR Task Panel");
+        return panel != null ? panel.localPosition : new Vector3(0f, 2.18f, 2.85f);
     }
 
     void AlignTrainingRootToHeadForward()
@@ -619,6 +683,19 @@ public sealed class XRTrainingManager : MonoBehaviour
 
         if (teleportTracker != null)
             teleportTracker.Configure(this, xrOrigin);
+
+        if (panelRoot == null)
+        {
+            if (trainingRoot != null)
+                panelRoot = FindChildByName(trainingRoot, "UI");
+
+            if (panelRoot == null)
+            {
+                var panelObject = GameObject.Find("VR Task Panel");
+                if (panelObject != null && panelObject.transform.parent != null)
+                    panelRoot = panelObject.transform.parent;
+            }
+        }
     }
 
     void BeginTrialRecording()
@@ -977,6 +1054,25 @@ public sealed class XRTrainingManager : MonoBehaviour
 
         if (meshTarget != null)
             meshTarget.text = WrapWorldText(value, 36);
+    }
+
+    static Transform FindChildByName(Transform root, string childName)
+    {
+        if (root == null || string.IsNullOrEmpty(childName))
+            return null;
+
+        if (root.name == childName)
+            return root;
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform child = root.GetChild(i);
+            Transform match = FindChildByName(child, childName);
+            if (match != null)
+                return match;
+        }
+
+        return null;
     }
 
     static string WrapWorldText(string value, int maxLineLength)
