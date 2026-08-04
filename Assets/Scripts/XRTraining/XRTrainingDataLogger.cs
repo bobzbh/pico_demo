@@ -18,11 +18,13 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
 
     StreamWriter m_EventWriter;
     StreamWriter m_TrajectoryWriter;
+    StreamWriter m_AIExchangeWriter;
     string m_UserId;
     string m_TaskId;
     string m_TrialId;
     string m_Difficulty;
     string m_DifficultyLabel;
+    string m_ExperimentCondition;
     string m_TrialStartedAtUtc;
     int m_TrialNumber;
     int m_PoseSampleIndex;
@@ -31,6 +33,7 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
     public string EventFilePath { get; private set; }
     public string TrajectoryFilePath { get; private set; }
     public string SummaryFilePath { get; private set; }
+    public string AIExchangeFilePath { get; private set; }
     public string OutputRootPath { get; private set; }
     public bool IsRecording => m_EventWriter != null || m_TrajectoryWriter != null;
 
@@ -41,7 +44,7 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
         rightControllerTransform = rightController;
     }
 
-    public void BeginTrial(string userId, string taskId, int trialNumber, XRTrainingDifficulty difficulty, string difficultyLabel)
+    public void BeginTrial(string userId, string taskId, int trialNumber, XRTrainingDifficulty difficulty, string difficultyLabel, XRTrainingExperimentCondition condition = XRTrainingExperimentCondition.NoAI)
     {
         EndTrial();
 
@@ -51,6 +54,7 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
         m_TrialId = $"{m_TaskId}_{trialNumber:000}";
         m_Difficulty = difficulty.ToString();
         m_DifficultyLabel = difficultyLabel;
+        m_ExperimentCondition = condition.ToString();
         m_PoseSampleIndex = 0;
         m_PoseAccumulator = 0f;
 
@@ -62,21 +66,28 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
         string eventDirectory = Path.Combine(root, "Events");
         string trajectoryDirectory = Path.Combine(root, "Trajectories");
         string summaryDirectory = Path.Combine(root, "Summaries");
+        string aiDirectory = Path.Combine(root, "AIExchanges");
         Directory.CreateDirectory(eventDirectory);
         Directory.CreateDirectory(trajectoryDirectory);
         Directory.CreateDirectory(summaryDirectory);
+        Directory.CreateDirectory(aiDirectory);
 
         EventFilePath = UniquePath(Path.Combine(eventDirectory, $"{Clean(m_UserId)}_{Clean(m_TaskId)}_{m_TrialNumber:000}_{Clean(m_Difficulty)}_{timestamp}_events.csv"));
         TrajectoryFilePath = UniquePath(Path.Combine(trajectoryDirectory, $"{Clean(m_UserId)}_{Clean(m_TaskId)}_{m_TrialNumber:000}_{Clean(m_Difficulty)}_{timestamp}_trajectory.csv"));
         SummaryFilePath = UniquePath(Path.Combine(summaryDirectory, $"{Clean(m_UserId)}_{Clean(m_TaskId)}_{m_TrialNumber:000}_{Clean(m_Difficulty)}_{timestamp}_summary.csv"));
+        AIExchangeFilePath = UniquePath(Path.Combine(aiDirectory, $"{Clean(m_UserId)}_{Clean(m_TaskId)}_{m_TrialNumber:000}_{Clean(m_Difficulty)}_{timestamp}_ai.csv"));
 
         m_EventWriter = new StreamWriter(EventFilePath, false, new UTF8Encoding(true));
-        m_EventWriter.WriteLine("Timestamp,UserID,TaskID,TrialID,TrialNumber,Difficulty,DifficultyLabel,TaskState,EventType,ObjectName,PositionX,PositionY,PositionZ,ElapsedSeconds,FinalScore,Success,CorrectCount,WrongCount,GrabCount,ReleaseCount,TeleportCount,ResetCount,Details");
+        m_EventWriter.WriteLine("Timestamp,UserID,TaskID,TrialID,TrialNumber,Difficulty,DifficultyLabel,Condition,TaskState,EventType,ObjectName,PositionX,PositionY,PositionZ,ElapsedSeconds,FinalScore,Success,CorrectCount,WrongCount,GrabCount,ReleaseCount,TeleportCount,ResetCount,Details");
         m_EventWriter.Flush();
 
         m_TrajectoryWriter = new StreamWriter(TrajectoryFilePath, false, new UTF8Encoding(true));
         m_TrajectoryWriter.WriteLine("Timestamp,SampleIndex,UserID,TaskID,TrialID,TrialNumber,Difficulty,DifficultyLabel,TaskState,ElapsedSeconds,HeadPosX,HeadPosY,HeadPosZ,HeadRotX,HeadRotY,HeadRotZ,HeadRotW,LeftPosX,LeftPosY,LeftPosZ,LeftRotX,LeftRotY,LeftRotZ,LeftRotW,RightPosX,RightPosY,RightPosZ,RightRotX,RightRotY,RightRotZ,RightRotW");
         m_TrajectoryWriter.Flush();
+
+        m_AIExchangeWriter = new StreamWriter(AIExchangeFilePath, false, new UTF8Encoding(true));
+        m_AIExchangeWriter.WriteLine("Timestamp,UserID,TaskID,TrialID,TrialNumber,Difficulty,DifficultyLabel,Condition,Trigger,Success,PromptSnapshot,ResponseJson,RawResponseOrError");
+        m_AIExchangeWriter.Flush();
 
         PruneOldRecords();
     }
@@ -95,6 +106,7 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
             m_TrialNumber.ToString(CultureInfo.InvariantCulture),
             m_Difficulty,
             m_DifficultyLabel,
+            m_ExperimentCondition,
             taskState.ToString(),
             eventType.ToString(),
             objectName ?? string.Empty,
@@ -132,6 +144,7 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
             "TrialNumber",
             "Difficulty",
             "DifficultyLabel",
+            "Condition",
             "TaskState",
             "ResultEventType",
             "Success",
@@ -145,6 +158,7 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
             "ResetCount",
             "EventFile",
             "TrajectoryFile",
+            "AIExchangeFile",
             "Details"
         };
 
@@ -158,6 +172,7 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
             m_TrialNumber.ToString(CultureInfo.InvariantCulture),
             m_Difficulty,
             m_DifficultyLabel,
+            m_ExperimentCondition,
             taskState.ToString(),
             resultEventType ?? string.Empty,
             stats.success ? "true" : "false",
@@ -171,6 +186,7 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
             stats.resetCount.ToString(CultureInfo.InvariantCulture),
             EventFilePath ?? string.Empty,
             TrajectoryFilePath ?? string.Empty,
+            AIExchangeFilePath ?? string.Empty,
             details ?? string.Empty
         };
 
@@ -187,6 +203,51 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
     {
         WriteTrialSummary(taskState, stats, resultEventType, details);
         EndTrial();
+    }
+
+    public void LogAIExchange(string trigger, bool success, string promptSnapshot, string responseJson, string rawResponseOrError)
+    {
+        if (string.IsNullOrEmpty(AIExchangeFilePath))
+            return;
+
+        string[] columns =
+        {
+            DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture),
+            m_UserId,
+            m_TaskId,
+            m_TrialId,
+            m_TrialNumber.ToString(CultureInfo.InvariantCulture),
+            m_Difficulty,
+            m_DifficultyLabel,
+            m_ExperimentCondition,
+            trigger ?? string.Empty,
+            success ? "true" : "false",
+            promptSnapshot ?? string.Empty,
+            responseJson ?? string.Empty,
+            rawResponseOrError ?? string.Empty
+        };
+
+        string line = CsvLine(columns);
+        if (m_AIExchangeWriter != null)
+        {
+            m_AIExchangeWriter.WriteLine(line);
+            m_AIExchangeWriter.Flush();
+            return;
+        }
+
+        try
+        {
+            using (var writer = new StreamWriter(AIExchangeFilePath, true, new UTF8Encoding(false)))
+                writer.WriteLine(line);
+        }
+        catch (IOException exception)
+        {
+            Debug.LogWarning("[XRTrainingDataLogger] Could not append AI exchange: " + exception.Message);
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            Debug.LogWarning("[XRTrainingDataLogger] Could not append AI exchange: " + exception.Message);
+        }
     }
 
     public void TickPoseRecording(XRTrainingTaskState taskState, float elapsedSeconds)
@@ -265,6 +326,13 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
             m_TrajectoryWriter.Dispose();
             m_TrajectoryWriter = null;
         }
+
+        if (m_AIExchangeWriter != null)
+        {
+            m_AIExchangeWriter.Flush();
+            m_AIExchangeWriter.Dispose();
+            m_AIExchangeWriter = null;
+        }
     }
 
     void OnDestroy()
@@ -281,6 +349,7 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
         PruneDirectory(Path.Combine(root, "Events"), maxSavedTrialRecords);
         PruneDirectory(Path.Combine(root, "Trajectories"), maxSavedTrialRecords);
         PruneDirectory(Path.Combine(root, "Summaries"), maxSavedTrialRecords);
+        PruneDirectory(Path.Combine(root, "AIExchanges"), maxSavedTrialRecords);
     }
 
     void PruneDirectory(string directory, int keepCount)
@@ -326,7 +395,7 @@ public sealed class XRTrainingDataLogger : MonoBehaviour
 
     bool IsCurrentRecordPath(string path)
     {
-        return SamePath(path, EventFilePath) || SamePath(path, TrajectoryFilePath) || SamePath(path, SummaryFilePath);
+        return SamePath(path, EventFilePath) || SamePath(path, TrajectoryFilePath) || SamePath(path, SummaryFilePath) || SamePath(path, AIExchangeFilePath);
     }
 
     static string Position(Transform source, int axis)

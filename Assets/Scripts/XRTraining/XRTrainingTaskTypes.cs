@@ -18,6 +18,12 @@ public enum XRTrainingDifficulty
     Hard
 }
 
+public enum XRTrainingExperimentCondition
+{
+    NoAI,
+    LLMAssisted
+}
+
 public enum XRTrainingEventType
 {
     StateChanged,
@@ -35,7 +41,13 @@ public enum XRTrainingEventType
     TaskEnded,
     ResultsShown,
     TaskReset,
-    LightToggled
+    LightToggled,
+    ExperimentConditionChanged,
+    AIHintRequested,
+    AIRequestSent,
+    AIHintReceived,
+    AIFallbackUsed,
+    AISummaryReceived
 }
 
 [Serializable]

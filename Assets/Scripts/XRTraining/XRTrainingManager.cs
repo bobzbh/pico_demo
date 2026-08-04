@@ -1,4 +1,7 @@
+using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -29,25 +32,35 @@ public sealed class XRTrainingManager : MonoBehaviour
     public string userId = "P001";
     public string taskId = "ColorBlockTask";
     public XRTrainingDifficultyConfig difficultyConfig = new XRTrainingDifficultyConfig();
+    public XRTrainingExperimentCondition experimentCondition = XRTrainingExperimentCondition.LLMAssisted;
+    public float aiIdleHintSeconds = 12f;
 
     [Header("Optional Recording")]
     public XRTrainingDataLogger dataLogger;
     public XRTrainingTeleportTracker teleportTracker;
+    public XRTrainingAIAssistant aiAssistant;
+    public InputField userIdInput;
 
     [Header("World UI")]
     public Text selectedObjectText;
     public Text scoreText;
     public Text difficultyText;
+    public Text conditionText;
     public Text statusText;
     public Text completionText;
+    public Text aiText;
     public TextMesh selectedObjectMeshText;
     public TextMesh scoreMeshText;
     public TextMesh difficultyMeshText;
+    public TextMesh conditionMeshText;
     public TextMesh statusMeshText;
     public TextMesh completionMeshText;
+    public TextMesh aiMeshText;
     public Button startTaskButton;
     public Button easyDifficultyButton;
     public Button normalDifficultyButton;
+    public Button conditionButton;
+    public Button hintButton;
     public Button resetButton;
     public Button lightButton;
     public Button finishButton;
@@ -67,16 +80,30 @@ public sealed class XRTrainingManager : MonoBehaviour
     bool m_ResultsEventLogged;
     float m_TaskStartTime;
     float m_StateEnteredTime;
+    float m_LastMeaningfulActionTime;
     int m_TrialNumber;
     string m_FailureReason = "";
+    string m_CurrentAIHintText = "AI: start a round and request help if needed.";
+    string m_CurrentAISummaryText = "AI summary will appear after the round.";
+    string m_LastEventType = "";
+    string m_LastEventObjectName = "";
+    string m_LastEventDetails = "";
+    string m_LastAITrigger = "";
+    string m_LastAISnapshotJson = "";
+    bool m_LastAIRequestWasSummary;
+    bool m_IdleHintRequested;
+    bool m_SummaryRequested;
+    readonly List<string> m_RecentEvents = new List<string>(12);
 
     public XRTrainingTaskState CurrentState { get; private set; } = XRTrainingTaskState.WaitingToStart;
     public bool CanInteractWithObjects => CurrentState == XRTrainingTaskState.Running;
     public bool TaskSolved => m_Stats.correctPlacements >= RequiredScore();
+    public string CurrentConditionLabel => experimentCondition == XRTrainingExperimentCondition.LLMAssisted ? "LLM-Assisted" : "No AI";
 
     void Awake()
     {
         ResolveReferences();
+        m_LastMeaningfulActionTime = Time.unscaledTime;
     }
 
     IEnumerator Start()
@@ -93,6 +120,7 @@ public sealed class XRTrainingManager : MonoBehaviour
     {
         HandleInstructionCountdown();
         UpdateTimer();
+        HandleAIIdleTrigger();
         HandleKeyboardShortcuts();
         CheckFinishReached();
     }
@@ -113,6 +141,14 @@ public sealed class XRTrainingManager : MonoBehaviour
 
         PrepareRoundForStart();
         BeginTrialRecording();
+        m_LastMeaningfulActionTime = Time.unscaledTime;
+        m_IdleHintRequested = false;
+        m_SummaryRequested = false;
+        m_CurrentAIHintText = experimentCondition == XRTrainingExperimentCondition.LLMAssisted
+            ? "AI: task started. You can request a hint."
+            : "AI: disabled for this trial.";
+        m_CurrentAISummaryText = "AI summary will appear after the round.";
+        m_LastAISnapshotJson = "";
         EnterState(XRTrainingTaskState.Instructions, "Read the goal: put each color cube on the matching target.");
         SetText(selectedObjectText, selectedObjectMeshText, "Selected: none");
         SetText(completionText, completionMeshText, "State: Instructions. Task will begin shortly.");
@@ -186,6 +222,51 @@ public sealed class XRTrainingManager : MonoBehaviour
         RefreshUI();
     }
 
+    public void SetUserId(string value)
+    {
+        string normalized = string.IsNullOrWhiteSpace(value) ? "P001" : value.Trim();
+        userId = normalized;
+        if (userIdInput != null && userIdInput.text != normalized)
+            userIdInput.text = normalized;
+        RefreshUI();
+    }
+
+    public void ToggleExperimentCondition()
+    {
+        if (!CanChangeDifficulty())
+        {
+            ShowStatus("Condition can be changed before a task starts.");
+            RefreshUI();
+            return;
+        }
+
+        experimentCondition = experimentCondition == XRTrainingExperimentCondition.NoAI
+            ? XRTrainingExperimentCondition.LLMAssisted
+            : XRTrainingExperimentCondition.NoAI;
+        LogEvent(XRTrainingEventType.ExperimentConditionChanged, "Condition", Vector3.zero, CurrentConditionLabel);
+        ShowStatus("Experiment condition: " + CurrentConditionLabel + ".");
+        RefreshUI();
+    }
+
+    public void RequestAIHint()
+    {
+        if (experimentCondition != XRTrainingExperimentCondition.LLMAssisted)
+        {
+            ShowStatus("AI is disabled in No-AI condition.");
+            RefreshUI();
+            return;
+        }
+
+        if (CurrentState != XRTrainingTaskState.Running && CurrentState != XRTrainingTaskState.Completed && CurrentState != XRTrainingTaskState.Failed && CurrentState != XRTrainingTaskState.Results)
+        {
+            ShowStatus("Start the task before requesting an AI hint.");
+            RefreshUI();
+            return;
+        }
+
+        RequestAIResponse(false, "UserRequestedHint");
+    }
+
     public void ToggleLight()
     {
         if (IsResultPageState())
@@ -226,6 +307,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         if (grabbable == null || CurrentState != XRTrainingTaskState.Running)
             return;
 
+        MarkMeaningfulAction();
         m_Stats.grabCount++;
         SetText(selectedObjectText, selectedObjectMeshText, "Selected: " + grabbable.displayName);
         ShowStatus("Grabbed " + grabbable.displayName + ".");
@@ -238,6 +320,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         if (grabbable == null || CurrentState != XRTrainingTaskState.Running)
             return;
 
+        MarkMeaningfulAction();
         m_Stats.releaseCount++;
         LogEvent(XRTrainingEventType.ObjectRelease, grabbable.displayName, grabbable.transform.position, "release");
         EvaluatePlacement(grabbable);
@@ -246,6 +329,8 @@ public sealed class XRTrainingManager : MonoBehaviour
 
     public void ReportInvalidObjectOperation(XRTrainingGrabbable grabbable, string reason)
     {
+        if (CurrentState == XRTrainingTaskState.Running)
+            MarkMeaningfulAction();
         string objectName = grabbable != null ? grabbable.displayName : "Object";
         ShowStatus(objectName + ": " + reason);
         RefreshUI();
@@ -256,6 +341,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         if (CurrentState != XRTrainingTaskState.Running && CurrentState != XRTrainingTaskState.Completed)
             return;
 
+        MarkMeaningfulAction();
         m_Stats.teleportCount++;
         ShowStatus("Teleported.");
         LogEvent(XRTrainingEventType.Teleport, "Teleport", position, "teleport");
@@ -363,6 +449,9 @@ public sealed class XRTrainingManager : MonoBehaviour
         m_TaskStartTime = Time.unscaledTime;
         m_Stats.elapsedSeconds = 0f;
         m_TimerRunning = true;
+        m_LastMeaningfulActionTime = Time.unscaledTime;
+        m_IdleHintRequested = false;
+        m_LastAISnapshotJson = "";
         SetAllObjectInteraction(true);
         SetFinishUnlocked(false);
         EnterState(XRTrainingTaskState.Running, "Task running. Grab cubes and place them on matching targets before time runs out.");
@@ -379,6 +468,14 @@ public sealed class XRTrainingManager : MonoBehaviour
         m_CompletionEventLogged = false;
         m_ResultsEventLogged = false;
         m_FailureReason = "";
+        m_IdleHintRequested = false;
+        m_SummaryRequested = false;
+        m_CurrentAIHintText = experimentCondition == XRTrainingExperimentCondition.LLMAssisted
+            ? "AI: start a round and request a hint when needed."
+            : "AI: disabled for this trial.";
+        m_CurrentAISummaryText = "AI summary will appear after the round.";
+        m_LastAISnapshotJson = "";
+        m_RecentEvents.Clear();
         SetAllObjectInteraction(false);
         ResetObjectsOnly();
         SetFinishUnlocked(false);
@@ -398,6 +495,12 @@ public sealed class XRTrainingManager : MonoBehaviour
         m_ResultsEventLogged = false;
         m_FailureReason = "";
         m_Stats.Clear();
+        m_LastAISnapshotJson = "";
+        m_RecentEvents.Clear();
+        m_CurrentAIHintText = experimentCondition == XRTrainingExperimentCondition.LLMAssisted
+            ? "AI: start a round and request a hint when needed."
+            : "AI: disabled for this trial.";
+        m_CurrentAISummaryText = "AI summary will appear after the round.";
 
         SetAllObjectInteraction(false);
         ResetObjectsOnly();
@@ -429,6 +532,9 @@ public sealed class XRTrainingManager : MonoBehaviour
             zone.ShowWrongFeedback();
             ShowStatus(grabbable.displayName + " is on the wrong target.");
             LogEvent(XRTrainingEventType.WrongPlacement, grabbable.displayName, grabbable.transform.position, zone.name);
+            MarkMeaningfulAction();
+            if (experimentCondition == XRTrainingExperimentCondition.LLMAssisted)
+                RequestAIResponse(false, "WrongPlacement");
             return;
         }
 
@@ -439,6 +545,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         zone.ShowCorrectFeedback();
         m_Stats.correctPlacements++;
         m_Stats.score = m_Stats.correctPlacements;
+        MarkMeaningfulAction();
         ShowStatus("Correct: " + grabbable.displayName + ".");
         LogEvent(XRTrainingEventType.CorrectPlacement, grabbable.displayName, grabbable.transform.position, zone.name);
 
@@ -460,6 +567,8 @@ public sealed class XRTrainingManager : MonoBehaviour
         SetText(completionText, completionMeshText, "State: Completed. Finish unlocked.");
         LogEvent(XRTrainingEventType.TaskComplete, "Complete", Vector3.zero, "all cubes matched");
         dataLogger?.WriteTrialSummary(CurrentState, m_Stats, XRTrainingEventType.TaskComplete.ToString(), "all cubes matched");
+        if (experimentCondition == XRTrainingExperimentCondition.LLMAssisted)
+            RequestAIResponse(true, "TaskComplete");
         RefreshUI();
     }
 
@@ -490,6 +599,8 @@ public sealed class XRTrainingManager : MonoBehaviour
         LogEvent(XRTrainingEventType.ResultsShown, "Results", finishPosition, "score=" + m_Stats.correctPlacements);
         dataLogger?.CompleteTrial(CurrentState, m_Stats, XRTrainingEventType.TaskEnded.ToString(), "finish reached");
         m_TrialRecordingActive = false;
+        if (experimentCondition == XRTrainingExperimentCondition.LLMAssisted && !m_SummaryRequested)
+            RequestAIResponse(true, "TaskEnded");
         RefreshUI();
     }
 
@@ -577,6 +688,12 @@ public sealed class XRTrainingManager : MonoBehaviour
 
         if (keyboard.fKey.wasPressedThisFrame)
             TryTeleportFromRay();
+
+        if (keyboard.hKey.wasPressedThisFrame)
+            RequestAIHint();
+
+        if (keyboard.cKey.wasPressedThisFrame)
+            ToggleExperimentCondition();
     }
 
     void CaptureStartState()
@@ -684,6 +801,9 @@ public sealed class XRTrainingManager : MonoBehaviour
         if (teleportTracker != null)
             teleportTracker.Configure(this, xrOrigin);
 
+        if (aiAssistant == null)
+            aiAssistant = GetComponent<XRTrainingAIAssistant>();
+
         if (panelRoot == null)
         {
             if (trainingRoot != null)
@@ -706,7 +826,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         m_TrialNumber++;
         XRTrainingDifficulty difficulty = difficultyConfig != null ? difficultyConfig.difficulty : XRTrainingDifficulty.Easy;
         string label = DifficultyLabel();
-        dataLogger.BeginTrial(userId, taskId, m_TrialNumber, difficulty, label);
+        dataLogger.BeginTrial(userId, taskId, m_TrialNumber, difficulty, label, experimentCondition);
         m_TrialRecordingActive = true;
     }
 
@@ -722,6 +842,193 @@ public sealed class XRTrainingManager : MonoBehaviour
         m_StateEnteredTime = Time.unscaledTime;
         ShowStatus(message);
         LogEvent(XRTrainingEventType.StateChanged, nextState.ToString(), Vector3.zero, message);
+    }
+
+    void HandleAIIdleTrigger()
+    {
+        if (experimentCondition != XRTrainingExperimentCondition.LLMAssisted || CurrentState != XRTrainingTaskState.Running || aiIdleHintSeconds <= 0f || m_IdleHintRequested)
+            return;
+
+        if (Time.unscaledTime - m_LastMeaningfulActionTime < aiIdleHintSeconds)
+            return;
+
+        m_IdleHintRequested = true;
+        RequestAIResponse(false, "Idle12Seconds");
+    }
+
+    void MarkMeaningfulAction()
+    {
+        m_LastMeaningfulActionTime = Time.unscaledTime;
+        m_IdleHintRequested = false;
+    }
+
+    void RequestAIResponse(bool summary, string trigger)
+    {
+        if (experimentCondition != XRTrainingExperimentCondition.LLMAssisted)
+            return;
+
+        ResolveReferences();
+        if (aiAssistant == null)
+        {
+            ShowAIFallback(XRTrainingAIAssistantFallback(summary), trigger, "AI assistant component missing");
+            return;
+        }
+
+        if (aiAssistant.IsBusy)
+        {
+            ShowStatus("AI request already in progress.");
+            RefreshUI();
+            return;
+        }
+
+        m_LastAITrigger = trigger;
+        m_LastAIRequestWasSummary = summary;
+        XRTrainingAIStateSnapshot requestSnapshot = BuildAIStateSnapshot();
+        m_LastAISnapshotJson = JsonUtility.ToJson(requestSnapshot);
+        if (summary)
+            m_SummaryRequested = true;
+        Vector3 requestPosition = headTransform != null ? headTransform.position : Vector3.zero;
+        if (!summary)
+            LogEvent(XRTrainingEventType.AIHintRequested, "AI", requestPosition, trigger);
+        LogEvent(XRTrainingEventType.AIRequestSent, "AI", requestPosition, trigger);
+        StartCoroutine(summary
+            ? aiAssistant.RequestSummary(requestSnapshot, trigger, OnAIResponse)
+            : aiAssistant.RequestHint(requestSnapshot, trigger, OnAIResponse));
+    }
+
+    void OnAIResponse(XRTrainingAIResponse response, string rawResponseOrError, bool networkSuccess)
+    {
+        bool summary = m_LastAIRequestWasSummary;
+        string snapshot = string.IsNullOrWhiteSpace(m_LastAISnapshotJson) ? JsonUtility.ToJson(BuildAIStateSnapshot()) : m_LastAISnapshotJson;
+        string responseJson = response != null ? JsonUtility.ToJson(response) : string.Empty;
+        dataLogger?.LogAIExchange(m_LastAITrigger, networkSuccess, snapshot, responseJson, rawResponseOrError);
+
+        if (response == null)
+            return;
+
+        if (summary && !string.IsNullOrWhiteSpace(response.summaryText))
+        {
+            m_SummaryRequested = true;
+            m_CurrentAISummaryText = response.summaryText + "\nNext: " + response.nextRoundSuggestion;
+            LogEvent(networkSuccess ? XRTrainingEventType.AISummaryReceived : XRTrainingEventType.AIFallbackUsed, "AI Summary", Vector3.zero, responseJson);
+        }
+        else
+        {
+            m_CurrentAIHintText = response.hintText;
+            LogEvent(networkSuccess ? XRTrainingEventType.AIHintReceived : XRTrainingEventType.AIFallbackUsed, response.targetObject, Vector3.zero, responseJson);
+            ShowStatus("AI: " + response.hintText);
+        }
+
+        RefreshUI();
+    }
+
+    void ShowAIFallback(XRTrainingAIResponse response, string trigger, string error)
+    {
+        m_LastAITrigger = trigger;
+        m_CurrentAIHintText = response != null ? response.hintText : "AI is temporarily unavailable. Match each cube to the same color target.";
+        m_CurrentAISummaryText = response != null ? response.summaryText + "\nNext: " + response.nextRoundSuggestion : m_CurrentAISummaryText;
+        string snapshot = string.IsNullOrWhiteSpace(m_LastAISnapshotJson) ? JsonUtility.ToJson(BuildAIStateSnapshot()) : m_LastAISnapshotJson;
+        dataLogger?.LogAIExchange(trigger, false, snapshot, response != null ? JsonUtility.ToJson(response) : string.Empty, error);
+        LogEvent(XRTrainingEventType.AIFallbackUsed, "AI", Vector3.zero, error);
+        ShowStatus("AI fallback: " + m_CurrentAIHintText);
+        RefreshUI();
+    }
+
+    XRTrainingAIResponse XRTrainingAIAssistantFallback(bool summary)
+    {
+        string remaining = FirstRemainingObjectName();
+        return summary
+            ? new XRTrainingAIResponse { summaryText = "Result: " + (m_Stats.success ? "success" : "not complete") + ".", nextRoundSuggestion = "Match each cube color with its target." }
+            : new XRTrainingAIResponse { hintText = string.IsNullOrEmpty(remaining) ? "Move to Finish to show results." : "Grab " + remaining + " and place it on the matching target.", targetObject = remaining, suggestedAction = "GrabAndPlace", reason = "Local fallback." };
+    }
+
+    XRTrainingAIStateSnapshot BuildAIStateSnapshot()
+    {
+        var activeObjects = new List<XRTrainingAIObjectSnapshot>();
+        var remainingObjects = new List<XRTrainingAIObjectSnapshot>();
+        var remainingGoals = new List<string>();
+        if (grabbables != null)
+        {
+            foreach (var grabbable in grabbables)
+            {
+                if (grabbable == null || !grabbable.gameObject.activeInHierarchy)
+                    continue;
+
+                var snapshot = new XRTrainingAIObjectSnapshot
+                {
+                    name = grabbable.displayName,
+                    color = grabbable.colorId.ToString(),
+                    scored = grabbable.Scored,
+                    position = XRTrainingAIVector3.From(grabbable.transform.position),
+                    currentZone = grabbable.CurrentZone != null ? grabbable.CurrentZone.name : string.Empty
+                };
+                activeObjects.Add(snapshot);
+                if (!snapshot.scored)
+                {
+                    remainingObjects.Add(snapshot);
+                    remainingGoals.Add("Place " + grabbable.displayName + " on " + MatchingTargetName(grabbable.colorId));
+                }
+            }
+        }
+
+        if (remainingGoals.Count == 0 && TaskSolved)
+            remainingGoals.Add("Go to the Finish zone to complete the round.");
+
+        return new XRTrainingAIStateSnapshot
+        {
+            userId = SafeUserId(),
+            taskId = SafeTaskId(),
+            trialNumber = m_TrialNumber,
+            condition = CurrentConditionLabel,
+            difficulty = DifficultyLabel(),
+            state = CurrentState.ToString(),
+            elapsedSeconds = m_Stats.elapsedSeconds,
+            timeLimitSeconds = timeLimitSeconds,
+            score = m_Stats.score,
+            requiredScore = RequiredScore(),
+            correctCount = m_Stats.correctPlacements,
+            wrongCount = m_Stats.wrongPlacements,
+            grabCount = m_Stats.grabCount,
+            releaseCount = m_Stats.releaseCount,
+            teleportCount = m_Stats.teleportCount,
+            resetCount = m_Stats.resetCount,
+            success = m_Stats.success,
+            lastEventType = m_LastEventType,
+            lastObjectName = m_LastEventObjectName,
+            lastEventDetails = m_LastEventDetails,
+            recentEvents = m_RecentEvents.ToArray(),
+            remainingGoals = remainingGoals.ToArray(),
+            objects = activeObjects.ToArray(),
+            remainingObjects = remainingObjects.ToArray()
+        };
+    }
+
+    string FirstRemainingObjectName()
+    {
+        if (grabbables == null)
+            return string.Empty;
+
+        foreach (var grabbable in grabbables)
+        {
+            if (grabbable != null && grabbable.gameObject.activeInHierarchy && !grabbable.Scored)
+                return grabbable.displayName;
+        }
+
+        return string.Empty;
+    }
+
+    string MatchingTargetName(XRTrainingColorId colorId)
+    {
+        if (targetZones != null)
+        {
+            foreach (var zone in targetZones)
+            {
+                if (zone != null && zone.gameObject.activeInHierarchy && zone.colorId == colorId)
+                    return zone.name;
+            }
+        }
+
+        return colorId + " Target";
     }
 
     void UpdateTimer()
@@ -894,6 +1201,9 @@ public sealed class XRTrainingManager : MonoBehaviour
             SetText(completionText, completionMeshText, CompletionTextForState());
         }
 
+        SetText(conditionText, conditionMeshText, "Condition: " + CurrentConditionLabel + "   User: " + SafeUserId());
+        SetText(aiText, aiMeshText, IsResultPageState() ? "AI Summary: " + m_CurrentAISummaryText : m_CurrentAIHintText);
+
         if (startTaskButton != null)
             startTaskButton.interactable = CurrentState == XRTrainingTaskState.WaitingToStart || CurrentState == XRTrainingTaskState.Failed || CurrentState == XRTrainingTaskState.Results;
 
@@ -903,6 +1213,18 @@ public sealed class XRTrainingManager : MonoBehaviour
 
         if (normalDifficultyButton != null)
             normalDifficultyButton.interactable = canChangeDifficulty && CurrentDifficulty() != XRTrainingDifficulty.Normal;
+
+        if (conditionButton != null)
+            conditionButton.interactable = canChangeDifficulty;
+
+        if (hintButton != null)
+        {
+            bool canRequestHint = CurrentState == XRTrainingTaskState.Running ||
+                                  CurrentState == XRTrainingTaskState.Completed ||
+                                  CurrentState == XRTrainingTaskState.Failed ||
+                                  CurrentState == XRTrainingTaskState.Results;
+            hintButton.interactable = experimentCondition == XRTrainingExperimentCondition.LLMAssisted && canRequestHint && (aiAssistant == null || !aiAssistant.IsBusy);
+        }
 
         if (resetButton != null)
             resetButton.interactable = true;
@@ -918,7 +1240,7 @@ public sealed class XRTrainingManager : MonoBehaviour
 
     void RefreshResultPageUI()
     {
-        SetText(difficultyText, difficultyMeshText, "Result Page | Difficulty: " + DifficultyLabel());
+        SetText(difficultyText, difficultyMeshText, "Result Page | Difficulty: " + DifficultyLabel() + " | Condition: " + CurrentConditionLabel);
         SetText(selectedObjectText, selectedObjectMeshText, "User: " + SafeUserId() + "   Task: " + SafeTaskId());
         SetText(scoreText, scoreMeshText, "Score: " + m_Stats.score + " / " + RequiredScore() + "   Time: " + FormatTime(m_Stats.elapsedSeconds));
         SetText(statusText, statusMeshText, "Correct: " + m_Stats.correctPlacements + "   Wrong: " + m_Stats.wrongPlacements + "\nGrabs: " + m_Stats.grabCount + "   Teleports: " + m_Stats.teleportCount);
@@ -960,6 +1282,8 @@ public sealed class XRTrainingManager : MonoBehaviour
         SetButtonLabel(resetButton, resultPage ? "Menu" : "Reset", "Reset Button World Text");
         SetButtonLabel(lightButton, resultPage ? "Switch" : "Light", "Light Button World Text");
         SetButtonLabel(finishButton, CurrentState == XRTrainingTaskState.Results ? "Done" : "Go Finish", "Go Finish Button World Text");
+        SetButtonLabel(conditionButton, experimentCondition == XRTrainingExperimentCondition.LLMAssisted ? "AI On" : "AI Off", "Condition Button World Text");
+        SetButtonLabel(hintButton, "Hint", "Hint Button World Text");
     }
 
     void SetButtonLabel(Button button, string label, string worldTextName)
@@ -1008,6 +1332,12 @@ public sealed class XRTrainingManager : MonoBehaviour
 
     void LogEvent(XRTrainingEventType eventType, string objectName, Vector3 position, string details)
     {
+        m_LastEventType = eventType.ToString();
+        m_LastEventObjectName = objectName ?? string.Empty;
+        m_LastEventDetails = details ?? string.Empty;
+        if (m_RecentEvents.Count >= 12)
+            m_RecentEvents.RemoveAt(0);
+        m_RecentEvents.Add(m_LastEventType + ":" + m_LastEventObjectName + ":" + m_LastEventDetails);
         dataLogger?.LogEvent(eventType, CurrentState, objectName, position, m_Stats.elapsedSeconds, m_Stats, details);
     }
 

@@ -11,7 +11,9 @@ public enum XRTrainingPanelAction
     NormalDifficulty,
     Reset,
     ToggleLight,
-    GoFinish
+    GoFinish,
+    ToggleCondition,
+    RequestHint
 }
 
 [DisallowMultipleComponent]
@@ -58,6 +60,9 @@ public sealed class XRTrainingPanelButton : MonoBehaviour
         if (manager == null)
             return;
 
+        if (visualButton != null && !visualButton.interactable)
+            return;
+
         if (Time.unscaledTime - m_LastInvokeTime < cooldownSeconds)
             return;
 
@@ -82,6 +87,12 @@ public sealed class XRTrainingPanelButton : MonoBehaviour
                 break;
             case XRTrainingPanelAction.GoFinish:
                 manager.TryTeleportToFinish();
+                break;
+            case XRTrainingPanelAction.ToggleCondition:
+                manager.ToggleExperimentCondition();
+                break;
+            case XRTrainingPanelAction.RequestHint:
+                manager.RequestAIHint();
                 break;
         }
     }
