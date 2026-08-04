@@ -26,14 +26,14 @@ public sealed class XRTrainingManager : MonoBehaviour
 
     [Header("Task Flow")]
     public float instructionSeconds = 1f;
-    public float timeLimitSeconds = 5f;
+    public float timeLimitSeconds = XRTrainingDifficultyConfig.DefaultTimeLimitSeconds;
     public float resultPanelDistance = 2f;
     public float resultPanelHeightOffset = 0.02f;
     public string userId = "P001";
     public string taskId = "ColorBlockTask";
     public XRTrainingDifficultyConfig difficultyConfig = new XRTrainingDifficultyConfig();
     public XRTrainingExperimentCondition experimentCondition = XRTrainingExperimentCondition.LLMAssisted;
-    public float aiIdleHintSeconds = 12f;
+    public float aiIdleHintSeconds = 4f;
 
     [Header("Optional Recording")]
     public XRTrainingDataLogger dataLogger;
@@ -145,7 +145,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         m_IdleHintRequested = false;
         m_SummaryRequested = false;
         m_CurrentAIHintText = experimentCondition == XRTrainingExperimentCondition.LLMAssisted
-            ? "AI: task started. You can request a hint."
+            ? "Automatic hint is loading..."
             : "AI: disabled for this trial.";
         m_CurrentAISummaryText = "AI summary will appear after the round.";
         m_LastAISnapshotJson = "";
@@ -457,6 +457,8 @@ public sealed class XRTrainingManager : MonoBehaviour
         EnterState(XRTrainingTaskState.Running, "Task running. Grab cubes and place them on matching targets before time runs out.");
         LogEvent(XRTrainingEventType.TaskStart, "TaskStart", Vector3.zero, "timer started; limit=" + TimerLimitText());
         dataLogger?.WritePoseSample(CurrentState, m_Stats.elapsedSeconds);
+        if (experimentCondition == XRTrainingExperimentCondition.LLMAssisted)
+            RequestAIResponse(false, "TaskStartAutoHint");
         RefreshUI();
     }
 
@@ -471,7 +473,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         m_IdleHintRequested = false;
         m_SummaryRequested = false;
         m_CurrentAIHintText = experimentCondition == XRTrainingExperimentCondition.LLMAssisted
-            ? "Start a round and request a hint when needed."
+            ? "Automatic hint will appear during the task."
             : "AI: disabled for this trial.";
         m_CurrentAISummaryText = "AI summary will appear after the round.";
         m_LastAISnapshotJson = "";
@@ -498,7 +500,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         m_LastAISnapshotJson = "";
         m_RecentEvents.Clear();
         m_CurrentAIHintText = experimentCondition == XRTrainingExperimentCondition.LLMAssisted
-            ? "Start a round and request a hint when needed."
+            ? "Automatic hint will appear during the task."
             : "AI: disabled for this trial.";
         m_CurrentAISummaryText = "AI summary will appear after the round.";
 
@@ -853,7 +855,7 @@ public sealed class XRTrainingManager : MonoBehaviour
             return;
 
         m_IdleHintRequested = true;
-        RequestAIResponse(false, "Idle12Seconds");
+        RequestAIResponse(false, "IdleAutoHint");
     }
 
     void MarkMeaningfulAction()
@@ -1060,6 +1062,7 @@ public sealed class XRTrainingManager : MonoBehaviour
     void ApplyDifficultyLayout()
     {
         difficultyConfig = difficultyConfig ?? XRTrainingDifficultyConfig.Easy();
+        difficultyConfig.timeLimitSeconds = XRTrainingDifficultyConfig.DefaultTimeLimitSeconds;
         timeLimitSeconds = difficultyConfig.timeLimitSeconds;
 
         int activeCount = ActiveBlockCount();

@@ -69,9 +69,9 @@ public static class XRTrainingSceneBuilder
         manager.panelRoot = uiRoot;
         manager.instructionSeconds = 1f;
         manager.difficultyConfig = XRTrainingDifficultyConfig.Easy();
-        manager.timeLimitSeconds = manager.difficultyConfig.timeLimitSeconds;
+        manager.timeLimitSeconds = 10f;
         manager.experimentCondition = XRTrainingExperimentCondition.LLMAssisted;
-        manager.aiIdleHintSeconds = 12f;
+        manager.aiIdleHintSeconds = 4f;
         manager.xrOrigin = origin != null ? origin.transform : null;
         manager.headTransform = mainCamera != null ? mainCamera.transform : null;
         manager.leftControllerTransform = FindTransform("XR Origin (XR Rig)/Camera Offset/Left Controller");
@@ -557,16 +557,14 @@ public static class XRTrainingSceneBuilder
         var easyColor = new Color(0.13f, 0.39f, 0.83f, 0.94f);
         var normalColor = new Color(0.55f, 0.25f, 0.66f, 0.94f);
         var conditionColor = new Color(0.08f, 0.55f, 0.5f, 0.94f);
-        var hintColor = new Color(0.13f, 0.48f, 0.64f, 0.94f);
         var startColor = new Color(0.08f, 0.57f, 0.32f, 0.96f);
         var resetColor = new Color(0.34f, 0.38f, 0.46f, 0.96f);
         var lightColor = new Color(0.76f, 0.49f, 0.1f, 0.96f);
         var finishColor = new Color(0.8f, 0.31f, 0.2f, 0.96f);
 
-        manager.easyDifficultyButton = CreateUIButton("Easy Difficulty Button", canvasObject.transform, "Easy", new Vector2(-330f, -202f), new Vector2(132f, 48f), easyColor);
-        manager.normalDifficultyButton = CreateUIButton("Normal Difficulty Button", canvasObject.transform, "Normal", new Vector2(-164f, -202f), new Vector2(150f, 48f), normalColor);
-        manager.conditionButton = CreateUIButton("Condition Button", canvasObject.transform, "AI On", new Vector2(8f, -202f), new Vector2(142f, 48f), conditionColor);
-        manager.hintButton = CreateUIButton("Hint Button", canvasObject.transform, "Hint", new Vector2(176f, -202f), new Vector2(128f, 48f), hintColor);
+        manager.easyDifficultyButton = CreateUIButton("Easy Difficulty Button", canvasObject.transform, "Easy", new Vector2(-246f, -202f), new Vector2(150f, 48f), easyColor);
+        manager.normalDifficultyButton = CreateUIButton("Normal Difficulty Button", canvasObject.transform, "Normal", new Vector2(-60f, -202f), new Vector2(160f, 48f), normalColor);
+        manager.conditionButton = CreateUIButton("Condition Button", canvasObject.transform, "AI On", new Vector2(140f, -202f), new Vector2(150f, 48f), conditionColor);
         manager.startTaskButton = CreateUIButton("Start Button", canvasObject.transform, "Start", new Vector2(-300f, -276f), new Vector2(140f, 50f), startColor);
         manager.resetButton = CreateUIButton("Reset Button", canvasObject.transform, "Reset", new Vector2(-128f, -276f), new Vector2(140f, 50f), resetColor);
         manager.lightButton = CreateUIButton("Light Button", canvasObject.transform, "Light", new Vector2(44f, -276f), new Vector2(140f, 50f), lightColor);
@@ -585,19 +583,17 @@ public static class XRTrainingSceneBuilder
         CreatePanelWorldText("Title World Text", parent, "XR Training Tasks", PanelWorldPoint(panelCenter, new Vector2(0f, 296f), panelScale), 0.0155f, Color.white);
         CreatePanelWorldText("User ID Label World Text", parent, "User ID", PanelWorldPoint(panelCenter, new Vector2(-365f, 246f), panelScale), 0.0095f, mutedColor);
         CreatePanelWorldText("AI Label World Text", parent, "AI Assistance", PanelWorldPoint(panelCenter, new Vector2(-356f, 10f), panelScale), 0.008f, accentColor);
-        CreatePanelWorldText("Easy Difficulty Button World Text", parent, "Easy", PanelWorldPoint(panelCenter, new Vector2(-330f, -202f), panelScale), 0.0105f, Color.white);
-        CreatePanelWorldText("Normal Difficulty Button World Text", parent, "Normal", PanelWorldPoint(panelCenter, new Vector2(-164f, -202f), panelScale), 0.0098f, Color.white);
-        CreatePanelWorldText("Condition Button World Text", parent, "AI On", PanelWorldPoint(panelCenter, new Vector2(8f, -202f), panelScale), 0.0096f, Color.white);
-        CreatePanelWorldText("Hint Button World Text", parent, "Hint", PanelWorldPoint(panelCenter, new Vector2(176f, -202f), panelScale), 0.0102f, Color.white);
+        CreatePanelWorldText("Easy Difficulty Button World Text", parent, "Easy", PanelWorldPoint(panelCenter, new Vector2(-246f, -202f), panelScale), 0.0105f, Color.white);
+        CreatePanelWorldText("Normal Difficulty Button World Text", parent, "Normal", PanelWorldPoint(panelCenter, new Vector2(-60f, -202f), panelScale), 0.0098f, Color.white);
+        CreatePanelWorldText("Condition Button World Text", parent, "AI On", PanelWorldPoint(panelCenter, new Vector2(140f, -202f), panelScale), 0.0096f, Color.white);
         CreatePanelWorldText("Start Button World Text", parent, "Start", PanelWorldPoint(panelCenter, new Vector2(-300f, -276f), panelScale), 0.0108f, Color.white);
         CreatePanelWorldText("Reset Button World Text", parent, "Reset", PanelWorldPoint(panelCenter, new Vector2(-128f, -276f), panelScale), 0.0108f, Color.white);
         CreatePanelWorldText("Light Button World Text", parent, "Light", PanelWorldPoint(panelCenter, new Vector2(44f, -276f), panelScale), 0.0108f, Color.white);
         CreatePanelWorldText("Go Finish Button World Text", parent, "Go Finish", PanelWorldPoint(panelCenter, new Vector2(244f, -276f), panelScale), 0.0098f, Color.white);
 
-        CreatePanelButtonHitbox("Easy Difficulty Button Hitbox", parent, manager, manager.easyDifficultyButton, XRTrainingPanelAction.EasyDifficulty, PanelWorldPoint(panelCenter, new Vector2(-330f, -202f), panelScale), new Vector2(132f, 48f), panelScale);
-        CreatePanelButtonHitbox("Normal Difficulty Button Hitbox", parent, manager, manager.normalDifficultyButton, XRTrainingPanelAction.NormalDifficulty, PanelWorldPoint(panelCenter, new Vector2(-164f, -202f), panelScale), new Vector2(150f, 48f), panelScale);
-        CreatePanelButtonHitbox("Condition Button Hitbox", parent, manager, manager.conditionButton, XRTrainingPanelAction.ToggleCondition, PanelWorldPoint(panelCenter, new Vector2(8f, -202f), panelScale), new Vector2(142f, 48f), panelScale);
-        CreatePanelButtonHitbox("Hint Button Hitbox", parent, manager, manager.hintButton, XRTrainingPanelAction.RequestHint, PanelWorldPoint(panelCenter, new Vector2(176f, -202f), panelScale), new Vector2(128f, 48f), panelScale);
+        CreatePanelButtonHitbox("Easy Difficulty Button Hitbox", parent, manager, manager.easyDifficultyButton, XRTrainingPanelAction.EasyDifficulty, PanelWorldPoint(panelCenter, new Vector2(-246f, -202f), panelScale), new Vector2(150f, 48f), panelScale);
+        CreatePanelButtonHitbox("Normal Difficulty Button Hitbox", parent, manager, manager.normalDifficultyButton, XRTrainingPanelAction.NormalDifficulty, PanelWorldPoint(panelCenter, new Vector2(-60f, -202f), panelScale), new Vector2(160f, 48f), panelScale);
+        CreatePanelButtonHitbox("Condition Button Hitbox", parent, manager, manager.conditionButton, XRTrainingPanelAction.ToggleCondition, PanelWorldPoint(panelCenter, new Vector2(140f, -202f), panelScale), new Vector2(150f, 48f), panelScale);
         CreatePanelButtonHitbox("Start Button Hitbox", parent, manager, manager.startTaskButton, XRTrainingPanelAction.Start, PanelWorldPoint(panelCenter, new Vector2(-300f, -276f), panelScale), new Vector2(140f, 50f), panelScale);
         CreatePanelButtonHitbox("Reset Button Hitbox", parent, manager, manager.resetButton, XRTrainingPanelAction.Reset, PanelWorldPoint(panelCenter, new Vector2(-128f, -276f), panelScale), new Vector2(140f, 50f), panelScale);
         CreatePanelButtonHitbox("Light Button Hitbox", parent, manager, manager.lightButton, XRTrainingPanelAction.ToggleLight, PanelWorldPoint(panelCenter, new Vector2(44f, -276f), panelScale), new Vector2(140f, 50f), panelScale);
@@ -607,7 +603,6 @@ public static class XRTrainingSceneBuilder
         UnityEventTools.AddPersistentListener(manager.easyDifficultyButton.onClick, manager.SelectEasyDifficulty);
         UnityEventTools.AddPersistentListener(manager.normalDifficultyButton.onClick, manager.SelectNormalDifficulty);
         UnityEventTools.AddPersistentListener(manager.conditionButton.onClick, manager.ToggleExperimentCondition);
-        UnityEventTools.AddPersistentListener(manager.hintButton.onClick, manager.RequestAIHint);
         UnityEventTools.AddPersistentListener(manager.resetButton.onClick, manager.ResetTask);
         UnityEventTools.AddPersistentListener(manager.lightButton.onClick, manager.ToggleLight);
         UnityEventTools.AddPersistentListener(manager.finishButton.onClick, manager.TryTeleportToFinish);

@@ -53,12 +53,14 @@ public enum XRTrainingEventType
 [Serializable]
 public sealed class XRTrainingDifficultyConfig
 {
+    public const float DefaultTimeLimitSeconds = 10f;
+
     public XRTrainingDifficulty difficulty = XRTrainingDifficulty.Easy;
     public string displayName = "Easy";
     public int blockCount = 3;
     public int scorePerCorrect = 1;
     public int penaltyPerWrong = 0;
-    public float timeLimitSeconds = 5f;
+    public float timeLimitSeconds = DefaultTimeLimitSeconds;
 
     public static XRTrainingDifficultyConfig Easy()
     {
@@ -67,12 +69,12 @@ public sealed class XRTrainingDifficultyConfig
 
     public static XRTrainingDifficultyConfig Normal()
     {
-        return new XRTrainingDifficultyConfig { difficulty = XRTrainingDifficulty.Normal, displayName = "Normal", blockCount = 4, timeLimitSeconds = 5f };
+        return new XRTrainingDifficultyConfig { difficulty = XRTrainingDifficulty.Normal, displayName = "Normal", blockCount = 4, timeLimitSeconds = DefaultTimeLimitSeconds };
     }
 
     public static XRTrainingDifficultyConfig Hard()
     {
-        return new XRTrainingDifficultyConfig { difficulty = XRTrainingDifficulty.Hard, displayName = "Hard", blockCount = 4, timeLimitSeconds = 5f };
+        return new XRTrainingDifficultyConfig { difficulty = XRTrainingDifficulty.Hard, displayName = "Hard", blockCount = 4, timeLimitSeconds = DefaultTimeLimitSeconds };
     }
 }
 
