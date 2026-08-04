@@ -83,7 +83,7 @@ public sealed class XRTrainingManager : MonoBehaviour
     float m_LastMeaningfulActionTime;
     int m_TrialNumber;
     string m_FailureReason = "";
-    string m_CurrentAIHintText = "AI: start a round and request help if needed.";
+    string m_CurrentAIHintText = "Start a round and request help if needed.";
     string m_CurrentAISummaryText = "AI summary will appear after the round.";
     string m_LastEventType = "";
     string m_LastEventObjectName = "";
@@ -471,7 +471,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         m_IdleHintRequested = false;
         m_SummaryRequested = false;
         m_CurrentAIHintText = experimentCondition == XRTrainingExperimentCondition.LLMAssisted
-            ? "AI: start a round and request a hint when needed."
+            ? "Start a round and request a hint when needed."
             : "AI: disabled for this trial.";
         m_CurrentAISummaryText = "AI summary will appear after the round.";
         m_LastAISnapshotJson = "";
@@ -498,7 +498,7 @@ public sealed class XRTrainingManager : MonoBehaviour
         m_LastAISnapshotJson = "";
         m_RecentEvents.Clear();
         m_CurrentAIHintText = experimentCondition == XRTrainingExperimentCondition.LLMAssisted
-            ? "AI: start a round and request a hint when needed."
+            ? "Start a round and request a hint when needed."
             : "AI: disabled for this trial.";
         m_CurrentAISummaryText = "AI summary will appear after the round.";
 
@@ -909,14 +909,14 @@ public sealed class XRTrainingManager : MonoBehaviour
         if (summary && !string.IsNullOrWhiteSpace(response.summaryText))
         {
             m_SummaryRequested = true;
-            m_CurrentAISummaryText = response.summaryText + "\nNext: " + response.nextRoundSuggestion;
+            m_CurrentAISummaryText = CompactLine(response.summaryText, 34);
             LogEvent(networkSuccess ? XRTrainingEventType.AISummaryReceived : XRTrainingEventType.AIFallbackUsed, "AI Summary", Vector3.zero, responseJson);
         }
         else
         {
-            m_CurrentAIHintText = response.hintText;
+            m_CurrentAIHintText = CompactLine(response.hintText, 34);
             LogEvent(networkSuccess ? XRTrainingEventType.AIHintReceived : XRTrainingEventType.AIFallbackUsed, response.targetObject, Vector3.zero, responseJson);
-            ShowStatus("AI: " + response.hintText);
+            ShowStatus("AI: " + m_CurrentAIHintText);
         }
 
         RefreshUI();
@@ -925,8 +925,8 @@ public sealed class XRTrainingManager : MonoBehaviour
     void ShowAIFallback(XRTrainingAIResponse response, string trigger, string error)
     {
         m_LastAITrigger = trigger;
-        m_CurrentAIHintText = response != null ? response.hintText : "AI is temporarily unavailable. Match each cube to the same color target.";
-        m_CurrentAISummaryText = response != null ? response.summaryText + "\nNext: " + response.nextRoundSuggestion : m_CurrentAISummaryText;
+        m_CurrentAIHintText = response != null ? CompactLine(response.hintText, 34) : "AI unavailable. Match each cube to the same color target.";
+        m_CurrentAISummaryText = response != null ? CompactLine(response.summaryText, 34) : m_CurrentAISummaryText;
         string snapshot = string.IsNullOrWhiteSpace(m_LastAISnapshotJson) ? JsonUtility.ToJson(BuildAIStateSnapshot()) : m_LastAISnapshotJson;
         dataLogger?.LogAIExchange(trigger, false, snapshot, response != null ? JsonUtility.ToJson(response) : string.Empty, error);
         LogEvent(XRTrainingEventType.AIFallbackUsed, "AI", Vector3.zero, error);
@@ -1196,13 +1196,13 @@ public sealed class XRTrainingManager : MonoBehaviour
             RefreshResultPageUI();
         else
         {
-            SetText(scoreText, scoreMeshText, "Score: " + m_Stats.correctPlacements + " / " + RequiredScore() + "   Time: " + TimerText());
-            SetText(difficultyText, difficultyMeshText, DifficultyDisplayText());
-            SetText(completionText, completionMeshText, CompletionTextForState());
+            SetText(scoreText, scoreMeshText, CompactLine("Score: " + m_Stats.correctPlacements + "/" + RequiredScore() + "  Time: " + TimerText(), 34));
+            SetText(difficultyText, difficultyMeshText, CompactLine(DifficultyDisplayText(), 34));
+            SetText(completionText, completionMeshText, CompactLine(CompletionTextForState(), 34));
         }
 
-        SetText(conditionText, conditionMeshText, "Condition: " + CurrentConditionLabel + "   User: " + SafeUserId());
-        SetText(aiText, aiMeshText, IsResultPageState() ? "AI Summary: " + m_CurrentAISummaryText : m_CurrentAIHintText);
+        SetText(conditionText, conditionMeshText, CompactLine("Cond: " + CurrentConditionLabel + "  User: " + SafeUserId(), 34));
+        SetText(aiText, aiMeshText, IsResultPageState() ? CompactLine("AI: " + m_CurrentAISummaryText, 34) : CompactLine("AI: " + m_CurrentAIHintText, 34));
 
         if (startTaskButton != null)
             startTaskButton.interactable = CurrentState == XRTrainingTaskState.WaitingToStart || CurrentState == XRTrainingTaskState.Failed || CurrentState == XRTrainingTaskState.Results;
@@ -1240,11 +1240,11 @@ public sealed class XRTrainingManager : MonoBehaviour
 
     void RefreshResultPageUI()
     {
-        SetText(difficultyText, difficultyMeshText, "Result Page | Difficulty: " + DifficultyLabel() + " | Condition: " + CurrentConditionLabel);
-        SetText(selectedObjectText, selectedObjectMeshText, "User: " + SafeUserId() + "   Task: " + SafeTaskId());
-        SetText(scoreText, scoreMeshText, "Score: " + m_Stats.score + " / " + RequiredScore() + "   Time: " + FormatTime(m_Stats.elapsedSeconds));
-        SetText(statusText, statusMeshText, "Correct: " + m_Stats.correctPlacements + "   Wrong: " + m_Stats.wrongPlacements + "\nGrabs: " + m_Stats.grabCount + "   Teleports: " + m_Stats.teleportCount);
-        SetText(completionText, completionMeshText, "Success: " + (m_Stats.success ? "Yes" : "No") + "\nAgain / Menu / Switch difficulty");
+        SetText(difficultyText, difficultyMeshText, CompactLine("Result | " + DifficultyLabel() + " | " + CurrentConditionLabel, 34));
+        SetText(selectedObjectText, selectedObjectMeshText, CompactLine("User: " + SafeUserId() + "  Task: " + SafeTaskId(), 34));
+        SetText(scoreText, scoreMeshText, CompactLine("Score: " + m_Stats.score + "/" + RequiredScore() + "  Time: " + FormatTime(m_Stats.elapsedSeconds), 34));
+        SetText(statusText, statusMeshText, CompactLine("C:" + m_Stats.correctPlacements + " W:" + m_Stats.wrongPlacements + " G:" + m_Stats.grabCount + " TP:" + m_Stats.teleportCount, 34));
+        SetText(completionText, completionMeshText, CompactLine("Success: " + (m_Stats.success ? "Yes" : "No") + "  Replay/Menu/Diff", 34));
     }
 
     string CompletionTextForState()
@@ -1252,19 +1252,19 @@ public sealed class XRTrainingManager : MonoBehaviour
         switch (CurrentState)
         {
             case XRTrainingTaskState.WaitingToStart:
-                return "State: Waiting to start.";
+                return "State: Waiting. Press Start.";
             case XRTrainingTaskState.Instructions:
-                return "State: Instructions. Starting soon. Limit " + TimerLimitText() + ".";
+                return "State: Instructions. Limit " + TimerLimitText() + ".";
             case XRTrainingTaskState.Running:
-                return "State: Running. Match all cubes before " + TimerLimitText() + ".";
+                return "State: Running. Finish before " + TimerLimitText() + ".";
             case XRTrainingTaskState.Completed:
                 return "State: Completed. Finish unlocked.";
             case XRTrainingTaskState.Failed:
-                return "State: Failed. " + FailureText() + " Click Reset.";
+                return "State: Failed. " + FailureText();
             case XRTrainingTaskState.Results:
-                return "State: Results. Score " + m_Stats.correctPlacements + " / " + RequiredScore() + ", Time " + TimerText() + ".";
+                return "State: Results. " + m_Stats.correctPlacements + "/" + RequiredScore() + " in " + TimerText() + ".";
             case XRTrainingTaskState.Restarting:
-                return "State: Restarting.";
+                return "State: Restarting...";
             default:
                 return "State: " + CurrentState + ".";
         }
@@ -1375,6 +1375,23 @@ public sealed class XRTrainingManager : MonoBehaviour
     static string FormatTime(float seconds)
     {
         return seconds.ToString("0.0") + "s";
+    }
+
+    static string CompactLine(string value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value))
+            return string.Empty;
+
+        string compact = value.Replace("\r", " ").Replace("\n", " ");
+        while (compact.Contains("  "))
+            compact = compact.Replace("  ", " ");
+
+        compact = compact.Trim();
+        if (compact.Length <= maxLength)
+            return compact;
+
+        int cut = Mathf.Max(0, maxLength - 1);
+        return compact.Substring(0, cut).TrimEnd() + "…";
     }
 
     static void SetText(Text target, TextMesh meshTarget, string value)
